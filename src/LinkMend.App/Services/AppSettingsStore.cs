@@ -5,6 +5,8 @@ namespace LinkMend.App.Services;
 
 public sealed class AppSettings
 {
+    public string Language { get; set; } = LanguageManager.Chinese;
+
     public bool ScanDesktop { get; set; } = true;
 
     public bool ScanStartMenu { get; set; } = true;
@@ -53,6 +55,9 @@ public sealed class AppSettingsStore
 
             settings.CustomFolders = Normalize(settings.CustomFolders);
             settings.SearchRoots = Normalize(settings.SearchRoots);
+            settings.Language = string.Equals(settings.Language, LanguageManager.English, StringComparison.OrdinalIgnoreCase)
+                ? LanguageManager.English
+                : LanguageManager.Chinese;
             return settings;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

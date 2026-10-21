@@ -235,6 +235,38 @@ public sealed class RelocationService
         }
     }
 
+    /// <summary>
+    /// Selects a candidate for unattended repair only when the evidence is strong
+    /// enough to avoid silently selecting one of several similarly named programs.
+    /// </summary>
+    public static ResolutionCandidate? SelectAutomaticCandidate(RelocationSearchResult result)
+    {
+        if (result.Candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var best = result.Candidates[0];
+        if (best.Confidence != CandidateConfidence.High)
+        {
+            return null;
+        }
+
+        if (result.Candidates.Count == 1)
+        {
+            return best;
+        }
+
+        var runnerUp = result.Candidates[1];
+        var scoreGap = best.Score - runnerUp.Score;
+        if (scoreGap < 15 || (runnerUp.Confidence == CandidateConfidence.High && scoreGap < 25))
+        {
+            return null;
+        }
+
+        return best;
+    }
+
     private List<string> BuildRoots(
         ScannedShortcut shortcut,
         string oldTarget,

@@ -117,6 +117,12 @@
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center">
+                        <Button Content="自动搜索并修复"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                AutomationProperties.AutomationId="AutoRepairButton"
+                                IsEnabled="{Binding CanAutoRepair}"
+                                Click="AutoRepair_Click"
+                                Margin="0,0,8,0" />
                         <Button Content="开始检查"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 AutomationProperties.AutomationId="ScanButton"
@@ -950,15 +956,25 @@
                     <Border Style="{StaticResource CardStyle}" Padding="20,18" Margin="0,12,0,0">
                         <StackPanel>
                             <TextBlock Text="本地数据" Style="{StaticResource SectionTitleStyle}" />
-                            <TextBlock Text="{Binding BackUpRoot, StringFormat='数据目录：{0}'}"
+                            <TextBlock Text="{Binding BackupRootDisplay}"
                                        Style="{StaticResource CaptionTextStyle}"
                                        Margin="0,8,0,0" />
-                            <TextBlock Text="{Binding BackUpHistoryRoot, StringFormat='历史记录：{0}'}"
+                            <TextBlock Text="{Binding BackupHistoryDisplay}"
                                        Style="{StaticResource CaptionTextStyle}"
                                        Margin="0,3,0,0" />
-                            <TextBlock Text="{Binding SettingsFilePath, StringFormat='设置文件：{0}'}"
+                            <TextBlock Text="{Binding SettingsDisplay}"
                                        Style="{StaticResource CaptionTextStyle}"
                                        Margin="0,3,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <TextBlock Text="语言 / Language:"
+                                           Style="{StaticResource BodyTextStyle}"
+                                           VerticalAlignment="Center" />
+                                <ComboBox ItemsSource="{Binding LanguageOptions}"
+                                          SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                                          Style="{StaticResource FluentComboBox}"
+                                          Width="150"
+                                          Margin="12,0,0,0" />
+                            </StackPanel>
                             <TextBlock Text="所有备份和设置只保存在本机；LinkMend 不上传快捷方式或程序信息。"
                                        Style="{StaticResource BodyTextStyle}"
                                        FontSize="11.5"
@@ -969,7 +985,7 @@
                     <Border Style="{StaticResource CardStyle}" Padding="20,18" Margin="0,12,0,0">
                         <StackPanel>
                             <TextBlock Text="项目信息" Style="{StaticResource SectionTitleStyle}" />
-                            <TextBlock Text="{Binding VersionText, StringFormat='当前版本：{0}'}"
+                            <TextBlock Text="{Binding VersionDisplay}"
                                        Style="{StaticResource BodyTextStyle}"
                                        Margin="0,8,0,0" />
                             <TextBlock Text="源代码：github.com/qinmuran0316/LinkMend"

@@ -4,7 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Authors>qinmuran0316</Authors>
     <Product>LinkMend</Product>
     <Company>qinmuran0316</Company>

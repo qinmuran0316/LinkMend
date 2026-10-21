@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using LinkMend.App.Services;
 using LinkMend.Core.Models;
 
 namespace LinkMend.App.Converters;
@@ -60,7 +61,7 @@ public sealed class HealthToLabelConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         value is ShortcutHealth health
-            ? health switch
+            ? LanguageManager.T(health switch
             {
                 ShortcutHealth.Healthy => "正常",
                 ShortcutHealth.NeedsAttention => "需注意",
@@ -68,8 +69,8 @@ public sealed class HealthToLabelConverter : IValueConverter
                 ShortcutHealth.Unsupported => "特殊项",
                 ShortcutHealth.Unreadable => "无法读取",
                 _ => "未知"
-            }
-            : "未知";
+            })
+            : LanguageManager.T("未知");
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         Binding.DoNothing;

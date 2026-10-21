@@ -108,6 +108,53 @@ public sealed class RelocationServiceTests
             () => fixture.Service.FindCandidates(fixture.Shortcut, Array.Empty<string>(), source.Token));
     }
 
+    [Fact]
+    public void SelectAutomaticCandidate_UsesUniqueHighConfidenceResult()
+    {
+        var candidate = new ResolutionCandidate(
+            SearchPath,
+            86,
+            CandidateConfidence.High,
+            new[] { "产品名称一致" },
+            null);
+
+        var selected = RelocationService.SelectAutomaticCandidate(
+            new RelocationSearchResult(new[] { candidate }, Array.Empty<string>(), null));
+
+        Assert.Same(candidate, selected);
+    }
+
+    [Fact]
+    public void SelectAutomaticCandidate_RejectsCloseMatches()
+    {
+        var candidates = new[]
+        {
+            new ResolutionCandidate(SearchPath, 86, CandidateConfidence.High, Array.Empty<string>(), null),
+            new ResolutionCandidate(HintPath, 75, CandidateConfidence.High, Array.Empty<string>(), null)
+        };
+
+        var selected = RelocationService.SelectAutomaticCandidate(
+            new RelocationSearchResult(candidates, Array.Empty<string>(), null));
+
+        Assert.Null(selected);
+    }
+
+    [Fact]
+    public void SelectAutomaticCandidate_RejectsMediumConfidenceResult()
+    {
+        var candidate = new ResolutionCandidate(
+            SearchPath,
+            60,
+            CandidateConfidence.Medium,
+            Array.Empty<string>(),
+            null);
+
+        var selected = RelocationService.SelectAutomaticCandidate(
+            new RelocationSearchResult(new[] { candidate }, Array.Empty<string>(), null));
+
+        Assert.Null(selected);
+    }
+
     private static Fixture CreateFixture()
     {
         var probe = new FakeSystemProbe();

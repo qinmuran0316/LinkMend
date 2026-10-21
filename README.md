@@ -8,7 +8,7 @@ Chinese-first and local-first. Explain before changing, back up before writing, 
 
 ![CI](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml/badge.svg)
 
-[下载 Windows 安装版](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64-Setup.exe) · [下载免安装版](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64.zip) · [全部版本 / Releases](https://github.com/qinmuran0316/LinkMend/releases)
+[下载 Windows 安装版](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.2/LinkMend-v0.1.2-win-x64-Setup.exe) · [下载免安装版](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.2/LinkMend-v0.1.2-win-x64.zip) · [全部版本 / Releases](https://github.com/qinmuran0316/LinkMend/releases)
 
 [简体中文](#简体中文) · [English](#english)
 
@@ -30,7 +30,9 @@ LinkMend 面向常见的“快捷方式坏了”场景：目标程序被移动�
 | 目标诊断 | 区分目标不存在、磁盘未就绪、网络离线、权限不足、路径无效和未知读取错误 |
 | 白图标诊断 | 检查自定义图标源是否存在、索引是否可取；只对可验证的图标问题提供修复 |
 | 起始位置 | 目标仍存在时，将无效起始位置改到程序目录；磁盘离线等情况下不擅自修改 |
-| 搬家定位 | 结合 App Paths、卸载记录和有限目录扫描，给出候选程序与证据，由用户选择 |
+| 搬家定位 | 结合 App Paths、卸载记录和有限目录扫描，给出候选程序与证据；支持自动采用高置信度且明显领先的唯一候选 |
+| 自动修复 | 一键搜索目标丢失的快捷方式，自动加入安全候选并进入统一修复预览；歧义结果保留给用户确认 |
+| 中英文界面 | 在“关于与安全”页切换简体中文 / English，设置会保存到本机 |
 | 数据目录检查 | 分析显式启动参数，报告不可用目录和同目标快捷方式之间的配置冲突，不自动改参数 |
 | 修复预览 | 逐字段展示目标、起始位置、图标的修改前后值 |
 | 安全修复 | 修复前备份原始 `.lnk`，写入后重新读取验证；验证失败且文件仍为本次写入的内容时自动恢复 |
@@ -55,7 +57,7 @@ LinkMend 把“准确判断”和“安全写入”拆成独立步骤：
 
 1. **扫描不启动目标程序。** 只读取 `.lnk` 字段并用文件系统元数据验证路径；不执行链接目标。
 2. **不把未知当成损坏。** 磁盘/网络不可用、权限不足、解析失败会分别报告，不会触发“改为另一个程序”的建议。
-3. **不自动选择候选。** 同名程序可能有多个；界面展示路径、可信度、元数据和匹配理由，最终由用户确认。
+3. **只自动采用强证据候选。** 同名程序可能有多个；自动流程只接受高置信度且分数明显领先的候选，接近或证据不足的结果仍要求用户确认。
 4. **修改前先备份。** 原始 `.lnk` 字节和 SHA-256 写入本地批次目录；历史记录同时保存修改前后的字段。
 5. **扫描后若文件变化，拒绝覆盖。** 修复前会重新计算当前哈希；与扫描时不一致就跳过。
 6. **写入后重新读取验证。** 目标、起始位置、图标不符合预期时，仅在文件仍匹配本次写入的内容时用快照恢复；其他程序的新修改或删除会被保留。
@@ -72,13 +74,13 @@ LinkMend 把“准确判断”和“安全写入”拆成独立步骤：
 #### 下载并安装（推荐）
 
 1. 打开 [Releases 发布页](https://github.com/qinmuran0316/LinkMend/releases/latest)。
-2. 展开 **Assets**，下载 **`LinkMend-v0.1.1-win-x64-Setup.exe`**，也可[直接下载安装包](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64-Setup.exe)。公开发布包无需登录 GitHub 即可下载。
+2. 展开 **Assets**，下载 **`LinkMend-v0.1.2-win-x64-Setup.exe`**，也可[直接下载安装包](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.2/LinkMend-v0.1.2-win-x64-Setup.exe)。公开发布包无需登录 GitHub 即可下载。
 3. 双击下载的安装程序。
 4. 按安装向导选择目录、开始菜单文件夹，以及是否创建桌面快捷方式；完成后启动 **LinkMend**。
 
 安装包支持简体中文和英文向导，默认安装到当前用户的 `%LOCALAPPDATA%\Programs\LinkMend`，无需管理员权限，也不需要预装 .NET。可从开始菜单或桌面快捷方式启动。
 
-需要免安装版时，下载 [**`LinkMend-v0.1.1-win-x64.zip`**](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64.zip)，解压后运行其中的 **`LinkMend.exe`**。`Source code` 是源码，直接运行请使用上述安装 EXE 或免安装 ZIP。
+需要免安装版时，下载 [**`LinkMend-v0.1.2-win-x64.zip`**](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.2/LinkMend-v0.1.2-win-x64.zip)，解压后运行其中的 **`LinkMend.exe`**。`Source code` 是源码，直接运行请使用上述安装 EXE 或免安装 ZIP。
 
 开发构建仍可在 [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml) 的成功运行中下载 **Artifacts → LinkMend-win-x64**，其中包含安装 EXE、免安装 ZIP 及校验文件；这种下载方式需要登录 GitHub。正式版本请优先使用 Releases。
 
@@ -106,8 +108,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1
 脚本先发布 x64 自包含应用，再生成安装程序与免安装 ZIP：
 
 ```text
-artifacts/release/LinkMend-v0.1.1-win-x64-Setup.exe
-artifacts/release/LinkMend-v0.1.1-win-x64.zip
+artifacts/release/LinkMend-v0.1.2-win-x64-Setup.exe
+artifacts/release/LinkMend-v0.1.2-win-x64.zip
 ```
 
 两种文件均附带 `.sha256` 校验文件。首次构建会下载固定版本的官方 Inno Setup 6.7.3 编译器及简体中文语言文件并校验 SHA-256；编译器以便携模式放在 `artifacts/tools/`，不注册到系统安装列表。已发布应用时可添加 `-SkipPublish` 只重新制作安装包。
@@ -121,7 +123,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 输出：
 
 ```text
-artifacts/release/LinkMend-v0.1.1-win-x64.zip
+artifacts/release/LinkMend-v0.1.2-win-x64.zip
 ```
 
 发布包为自包含单文件 WPF 应用，解压后运行 `LinkMend.exe` 即可。GitHub Actions 会构建并验证安装版，然后将安装 EXE、免安装 ZIP 及校验文件上传到 **LinkMend-win-x64**。
@@ -134,11 +136,15 @@ artifacts/release/LinkMend-v0.1.1-win-x64.zip
 
 检查结束后，点击左侧的问题项，在右侧查看原目标、图标、起始位置及判断依据。磁盘离线、网络不可达或权限不足的项目，应先恢复访问再重新检查。数据目录冲突只提供提示，需要自行核对程序的启动参数。
 
-#### 2. 修复图标或起始位置
+#### 2. 自动搜索并修复
+
+扫描完成后，如果存在目标丢失或其他可安全修复的项目，点击右上角 **自动搜索并修复**。LinkMend 会自行检查安装记录、原目标目录、快捷方式所在目录和常见安装目录，不要求先选择软件文件夹。高置信度且明显领先的结果会加入修复预览；多个候选接近、只有文件名匹配或完全找不到的项目不会被自动修改，仍可通过 **查找新位置** 手动确认。
+
+#### 3. 修复图标或起始位置
 
 对有可应用建议的项目勾选复选框，再点击 **预览并修复已选**；也可选中单项后点击 **修复此项**。**全选可处理** 用于批量选择，**清空选择** 用于取消勾选。目标丢失的项目需要先完成下一步的新位置确认。
 
-#### 3. 为搬家的程序定位新目标
+#### 4. 为搬家的程序定位新目标
 
 1. 选中“目标丢失”的项目，点击 **查找新位置**，等待候选列表加载。
 2. 核对候选的完整路径、产品名、发布者和匹配理由。若没有找到，点击 **添加目录** 选择软件的新安装目录，等待搜索；需要再查时点击 **重新搜索**。
@@ -147,13 +153,17 @@ artifacts/release/LinkMend-v0.1.1-win-x64.zip
 
 例如：原目标为 `D:\Apps\Example\Example.exe`，程序已移动到 `E:\Software\Example\Example.exe`。添加 `E:\Software\Example` 搜索，选中该程序并核对预览中的新目标，再应用修复。若程序已卸载且没有候选，请先重新安装程序或手动重建快捷方式。
 
-#### 4. 确认预览并应用
+#### 5. 确认预览并应用
 
 在 **预览修复** 窗口逐项核对“修改前 / 修改后”的目标、起始位置和图标。确认后点击 **应用修复**；点击 **取消** 会放弃本次预览。工具会先备份原始 `.lnk`，再修改并校验结果；结果窗口会列出成功、失败和跳过的项目。存在成功项时会自动重新检查。
 
 若提示“文件发生变化”，请重新检查后再选择修复，避免使用过期的诊断结果。修复和撤销写入期间，关闭窗口会被暂时阻止，请等待结果。
 
-#### 5. 查看历史与撤销
+#### 6. 切换界面语言
+
+打开 **关于与安全**，在“语言 / Language”下拉框选择 **简体中文** 或 **English**。切换会立即应用到主窗口和已打开的对话框，并保存到 `%LOCALAPPDATA%\LinkMend\settings.json`。
+
+#### 7. 查看历史与撤销
 
 打开 **修复历史**，选中要恢复的修复批次，查看每项结果后点击 **撤销此批次**，在确认框中确认。使用 **打开备份目录** 可查看原始快照；默认数据目录为 `%LOCALAPPDATA%\LinkMend`。
 
@@ -327,7 +337,7 @@ LinkMend addresses the common failure modes of Windows shortcuts: a target appli
 
 ![Diagnosis window](docs/screenshots/diagnosis.png)
 
-The application UI is currently Chinese-first; this English section documents the complete behavior and workflow.
+The application UI supports Simplified Chinese and English. Choose the language in **About & Safety**; the setting is saved locally.
 
 ### Core capabilities
 
@@ -337,7 +347,9 @@ The application UI is currently Chinese-first; this English section documents th
 | Target diagnosis | Distinguishes a missing target, offline disk, offline network path, access denied, invalid path, and unknown read errors |
 | White-icon diagnosis | Checks whether a custom icon source exists and whether its index can be read; only verifiable icon problems get automatic fixes |
 | Working directory | Changes an invalid start-in directory to the program folder when the target exists; does not modify it when a disk is offline |
-| Relocation | Combines App Paths, uninstall records, and a bounded directory search into candidates with evidence; the user makes the choice |
+| Relocation | Combines App Paths, uninstall records, and bounded directory searches; strong, clearly leading candidates can be selected automatically |
+| Auto repair | Searches missing targets in one click and sends only safe matches to the repair preview; ambiguous matches remain for confirmation |
+| Bilingual UI | Switch between Simplified Chinese and English in the app; the choice persists locally |
 | Data directory checks | Analyzes explicit command-line switches; reports unavailable directories and conflicts between shortcuts for the same target; never changes arguments automatically |
 | Repair preview | Shows before/after values for target, working directory, and icon field by field |
 | Safe repair | Backs up the original `.lnk`, reads back and verifies after writing, and restores on failure while the file still matches this operation's write |
@@ -362,7 +374,7 @@ LinkMend separates accurate diagnosis from safe writes:
 
 1. **Scanning never starts the target.** It reads `.lnk` fields and validates paths against filesystem metadata; it never executes the linked target.
 2. **Unknown is not broken.** Offline disks or networks, access denied, and parse failures are reported separately and never trigger a "point it at another program" suggestion.
-3. **No automatic candidate selection.** Several programs may share a filename. The UI shows paths, confidence, metadata, and matching evidence; the user makes the final choice.
+3. **Only strong candidates are automatic.** Several programs may share a filename. Automatic repair accepts only a high-confidence candidate with a clear score lead; close or weak matches still require confirmation.
 4. **Back up before modifying.** The original `.lnk` bytes and SHA-256 are stored in a local batch directory, and the history records before/after fields.
 5. **Refuse to overwrite changes made after the scan.** The current hash is recomputed before repair; a mismatch is skipped.
 6. **Read back and verify after writing.** If the target, working directory, or icon does not match the expected values, restore the snapshot only while the file still matches this operation's write. Changes or deletions made by another program are preserved.
@@ -379,13 +391,13 @@ LinkMend separates accurate diagnosis from safe writes:
 #### Download and install (recommended)
 
 1. Open the [latest release](https://github.com/qinmuran0316/LinkMend/releases/latest).
-2. Expand **Assets** and download **`LinkMend-v0.1.1-win-x64-Setup.exe`**, or use the [direct installer download](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64-Setup.exe). Public release downloads require no GitHub sign-in.
+2. Expand **Assets** and download **`LinkMend-v0.1.2-win-x64-Setup.exe`**, or use the [direct installer download](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.2/LinkMend-v0.1.2-win-x64-Setup.exe). Public release downloads require no GitHub sign-in.
 3. Double-click the downloaded installer.
 4. Choose the installation directory, Start Menu folder, and optional desktop shortcut in the wizard, then launch **LinkMend**.
 
 The wizard supports Simplified Chinese and English. It defaults to `%LOCALAPPDATA%\Programs\LinkMend` for the current user, requires no administrator rights, and includes the .NET runtime. Launch it from the Start Menu or desktop shortcut.
 
-For a portable build, download [**`LinkMend-v0.1.1-win-x64.zip`**](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64.zip), extract it, and run **`LinkMend.exe`** inside. The `Source code` archives contain source files; use the setup EXE or portable ZIP to run the app.
+For a portable build, download [**`LinkMend-v0.1.2-win-x64.zip`**](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.2/LinkMend-v0.1.2-win-x64.zip), extract it, and run **`LinkMend.exe`** inside. The `Source code` archives contain source files; use the setup EXE or portable ZIP to run the app.
 
 Development builds remain available under **Artifacts → LinkMend-win-x64** in successful [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml) runs, containing the setup EXE, portable ZIP, and checksums. Artifact downloads require GitHub sign-in; prefer Releases for published versions.
 
@@ -413,8 +425,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1
 The script publishes the x64 self-contained application and creates both formats:
 
 ```text
-artifacts/release/LinkMend-v0.1.1-win-x64-Setup.exe
-artifacts/release/LinkMend-v0.1.1-win-x64.zip
+artifacts/release/LinkMend-v0.1.2-win-x64-Setup.exe
+artifacts/release/LinkMend-v0.1.2-win-x64.zip
 ```
 
 Both files have accompanying `.sha256` checksums. The first build downloads the pinned official Inno Setup 6.7.3 compiler and Simplified Chinese language file, verifying their SHA-256 hashes. The compiler runs in portable mode under `artifacts/tools/` without uninstall registration. Add `-SkipPublish` to rebuild only the installer from an already published application.
@@ -428,7 +440,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 Output:
 
 ```text
-artifacts/release/LinkMend-v0.1.1-win-x64.zip
+artifacts/release/LinkMend-v0.1.2-win-x64.zip
 ```
 
 The package is a self-contained, single-file WPF application. Extract it and run `LinkMend.exe`. GitHub Actions builds and validates the installer, then uploads the setup EXE, portable ZIP, and checksums under **LinkMend-win-x64**.
@@ -441,11 +453,15 @@ Open **诊断与修复 (Diagnostics and Repair)** and select **桌面 (Desktop)*
 
 After scanning, select an issue on the left to read its original target, icon, working directory, and evidence on the right. Restore access to offline disks, networks, or inaccessible paths before rescanning. Data-directory conflicts are advisory; review the application's arguments yourself.
 
-#### 2. Fix an icon or working directory
+#### 2. Auto-search and repair
+
+After scanning, click **自动搜索并修复 (Auto search and repair)** when actionable items are present. LinkMend checks installation records, the old target folder, the shortcut folder, and common install folders automatically, so you do not need to choose the application's folder first. Strong, clearly leading matches enter the repair preview. Close matches and missing results are left unchanged for manual review.
+
+#### 3. Fix an icon or working directory
 
 Check items with an available repair and click **预览并修复已选 (Preview and Repair Selected)**, or select one item and click **修复此项 (Repair This Item)**. Use **全选可处理 (Select All Actionable)** to select a batch and **清空选择 (Clear Selection)** to uncheck it. Missing targets require relocation confirmation first.
 
-#### 3. Locate a moved application
+#### 4. Locate a moved application
 
 1. Select an item whose target is missing, click **查找新位置 (Find New Location)**, and wait for the candidate list.
 2. Review the full path, product name, publisher, and matching evidence. If no match appears, click **添加目录 (Add Directory)**, choose the application's new installation folder, and wait for the search. Click **重新搜索 (Search Again)** to repeat it when needed.
@@ -454,13 +470,17 @@ Check items with an available repair and click **预览并修复已选 (Preview 
 
 For example, if `D:\Apps\Example\Example.exe` moved to `E:\Software\Example\Example.exe`, add `E:\Software\Example` as a search folder, select that executable, and check the new target in the preview before applying. If the program was uninstalled and no candidate exists, reinstall it or recreate the shortcut manually.
 
-#### 4. Review and apply
+#### 5. Review and apply
 
 In **预览修复 (Repair Preview)**, review the before/after target, working directory, and icon values for each item. Click **应用修复 (Apply Repair)** to proceed, or **取消 (Cancel)** to dismiss the preview. LinkMend backs up the original `.lnk`, modifies it, and verifies the result. The result dialog lists successes, failures, and skipped items. A successful repair triggers a new scan.
 
 If the app reports that a file changed, scan again before choosing a repair. Closing the window is temporarily blocked while repair or undo writes are in progress; wait for the result.
 
-#### 5. Inspect history and undo
+#### 6. Switch the UI language
+
+Open **关于与安全 (About & Safety)** and choose **简体中文** or **English** under **语言 / Language**. The main window and open dialogs update immediately, and the setting is saved in `%LOCALAPPDATA%\LinkMend\settings.json`.
+
+#### 7. Inspect history and undo
 
 Open **修复历史 (Repair History)**, select the repair batch, review its item results, click **撤销此批次 (Undo This Batch)**, and confirm. **打开备份目录 (Open Backup Folder)** opens the original snapshots. The default data folder is `%LOCALAPPDATA%\LinkMend`.
 

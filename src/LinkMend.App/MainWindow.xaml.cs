@@ -22,6 +22,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         _viewModel = viewModel;
         DataContext = viewModel;
+        LanguageManager.LanguageChanged += LanguageManager_LanguageChanged;
+        Closed += (_, _) => LanguageManager.LanguageChanged -= LanguageManager_LanguageChanged;
         Loaded += OnLoaded;
         Closing += (_, args) =>
         {
@@ -115,6 +117,7 @@ public partial class MainWindow : Window
         try
         {
             FitToMonitor();
+            LanguageManager.Apply(this);
             _uiReady = true;
             await _viewModel.InitializeAsync();
         }
@@ -122,6 +125,12 @@ public partial class MainWindow : Window
         {
             HandleException(ex, "初始化界面");
         }
+    }
+
+    private void LanguageManager_LanguageChanged(object? sender, EventArgs e)
+    {
+        LanguageManager.Apply(this);
+        _viewModel.RefreshLanguage();
     }
 
     private void NavDiagnosis_Checked(object sender, RoutedEventArgs e)
@@ -172,12 +181,45 @@ public partial class MainWindow : Window
             var error = await _viewModel.ScanAsync();
             if (!string.IsNullOrWhiteSpace(error))
             {
-                ShowWarning(error, "检查未完成");
+                ShowWarning(LanguageManager.T(error), LanguageManager.T("检查未完成"));
             }
         }
         catch (Exception ex)
         {
             HandleException(ex, "扫描快捷方式");
+        }
+    }
+
+    private async void AutoRepair_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.IsBusy)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _viewModel.AutoLocateAsync();
+            if (result.ReadyRows.Count == 0)
+            {
+                ShowWarning(
+                    LanguageManager.T($"自动搜索没有找到可直接修复的项目。\n\n需要确认：{result.AmbiguousCount} 项\n未找到：{result.NotFoundCount} 项\n\n请选中目标丢失的项目，点击“查找新位置”确认候选。"),
+                    LanguageManager.T("自动搜索未找到可修复项目"));
+                return;
+            }
+
+            var summary = LanguageManager.T(
+                $"已找到并准备修复：{result.ReadyRows.Count} 项\n" +
+                $"自动定位程序：{result.LocatedCount} 项\n" +
+                $"需要人工确认：{result.AmbiguousCount} 项\n" +
+                $"未找到：{result.NotFoundCount} 项\n\n" +
+                "高置信度结果会进入修复预览，其他项目不会被修改。");
+            MessageBox.Show(this, summary, LanguageManager.T("自动搜索完成"), MessageBoxButton.OK, MessageBoxImage.Information);
+            await RepairRowsAsync(result.ReadyRows);
+        }
+        catch (Exception ex)
+        {
+            HandleException(ex, "自动搜索并修复");
         }
     }
 

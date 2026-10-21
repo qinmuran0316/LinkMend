@@ -1,3 +1,4 @@
+using LinkMend.App.Services;
 using LinkMend.Core.Models;
 using LinkMend.Core.Paths;
 
@@ -17,7 +18,14 @@ public sealed class ShortcutRow : ObservableObject
 
     public ShortcutHealth Health => Item.Diagnosis.Health;
 
-    public IReadOnlyList<ShortcutIssue> Issues => Item.Diagnosis.Issues;
+    public IReadOnlyList<ShortcutIssue> Issues => Item.Diagnosis.Issues
+        .Select(issue => issue with
+        {
+            Title = LanguageManager.T(issue.Title),
+            Summary = LanguageManager.T(issue.Summary),
+            Evidence = issue.Evidence.Select(LanguageManager.T).ToArray()
+        })
+        .ToArray();
 
     public bool HasIssues => Issues.Count > 0;
 
@@ -34,7 +42,7 @@ public sealed class ShortcutRow : ObservableObject
 
     public string ScopeLabel => Item.ScopeLabel;
 
-    public string StatusLabel => Item.Diagnosis.PrimaryIssue?.Code switch
+    public string StatusLabel => LanguageManager.T(Item.Diagnosis.PrimaryIssue?.Code switch
     {
         IssueCodes.TargetUnavailable or IssueCodes.TargetNetworkUnavailable => "暂不可用",
         IssueCodes.TargetAccessDenied => "需检查权限",
@@ -47,14 +55,14 @@ public sealed class ShortcutRow : ObservableObject
             ShortcutHealth.Unreadable => "无法读取",
             _ => "未知"
         }
-    };
+    });
 
-    public string PrimaryTitle =>
-        Item.Diagnosis.PrimaryIssue?.Title ?? "未发现问题";
+    public string PrimaryTitle => LanguageManager.T(
+        Item.Diagnosis.PrimaryIssue?.Title ?? "未发现问题");
 
-    public string PrimarySummary =>
+    public string PrimarySummary => LanguageManager.T(
         Item.Diagnosis.PrimaryIssue?.Summary
-        ?? "LinkMend 没有发现可确定的目标、起始位置或图标问题。";
+        ?? "LinkMend 没有发现可确定的目标、起始位置或图标问题。") ;
 
     public bool NeedsRelocation => Item.Diagnosis.NeedsRelocation;
 
@@ -84,12 +92,12 @@ public sealed class ShortcutRow : ObservableObject
     public string CandidateDisplay =>
         SelectedCandidate is null
             ? ""
-            : $"{SelectedCandidate.ExecutablePath}（{ConfidenceLabel(SelectedCandidate.Confidence)}可信度）";
+            : LanguageManager.T($"{SelectedCandidate.ExecutablePath}（{ConfidenceLabel(SelectedCandidate.Confidence)}可信度）");
 
     public string CandidateReasons =>
         SelectedCandidate is null
             ? ""
-            : string.Join(Environment.NewLine, SelectedCandidate.Reasons.Select(reason => $"• {reason}"));
+            : string.Join(Environment.NewLine, SelectedCandidate.Reasons.Select(reason => $"• {LanguageManager.T(reason)}"));
 
     public string TargetDisplay
     {
@@ -99,7 +107,7 @@ public sealed class ShortcutRow : ObservableObject
             var resolved = Item.Paths.TargetPath;
             if (string.IsNullOrWhiteSpace(raw) && string.IsNullOrWhiteSpace(resolved))
             {
-                return "（未记录目标）";
+                return LanguageManager.T("（未记录目标）");
             }
 
             if (string.IsNullOrWhiteSpace(raw)
@@ -118,7 +126,7 @@ public sealed class ShortcutRow : ObservableObject
         {
             if (string.IsNullOrWhiteSpace(Item.Link.WorkingDirectory))
             {
-                return "（未设置，使用目标所在目录）";
+                return LanguageManager.T("（未设置，使用目标所在目录）");
             }
 
             return Item.Paths.WorkingDirectory;
@@ -131,7 +139,7 @@ public sealed class ShortcutRow : ObservableObject
         {
             if (string.IsNullOrWhiteSpace(Item.Link.IconPath))
             {
-                return "使用目标程序默认图标";
+                return LanguageManager.T("使用目标程序默认图标");
             }
 
             return $"{Item.Paths.IconPath}, {Item.Link.IconIndex}";
@@ -144,9 +152,9 @@ public sealed class ShortcutRow : ObservableObject
         {
             if (NeedsRelocation)
             {
-                return SelectedCandidate is null
+                return LanguageManager.T(SelectedCandidate is null
                     ? "点击“查找新位置”，从候选程序中确认正确位置后再修复。"
-                    : $"目标将改为：{SelectedCandidate.ExecutablePath}。请预览后再应用修复。";
+                    : $"目标将改为：{SelectedCandidate.ExecutablePath}。请预览后再应用修复。");
             }
 
             if (HasAutoFix)
@@ -168,25 +176,25 @@ public sealed class ShortcutRow : ObservableObject
                     fixes.Add("修复或清除失效的自定义图标");
                 }
 
-                return fixes.Count > 0
+                return LanguageManager.T(fixes.Count > 0
                     ? $"可安全自动修复：{string.Join("；", fixes)}。修复前会先备份。"
-                    : "有可自动修复的问题，请预览修改后再确认。";
+                    : "有可自动修复的问题，请预览修改后再确认。");
             }
 
-            return Health switch
+            return LanguageManager.T(Health switch
             {
                 ShortcutHealth.Unreadable => "建议删除后重新创建快捷方式；LinkMend 不会改写无法读取的文件。",
                 ShortcutHealth.Unsupported => "这类快捷方式由系统或应用托管，本版不做修改。",
                 ShortcutHealth.NeedsAttention => "请根据诊断依据手动处理；LinkMend 会避免自动修改数据目录和启动参数。",
                 ShortcutHealth.Broken => "检查文件权限或恢复磁盘后重新扫描；当前信息不足以安全修复。",
                 _ => "未发现可确定的问题。如果图标仍显示为空，可能是 Windows 图标缓存问题，本版不会强制清理。"
-            };
+            });
         }
     }
 
     public string CheckBoxToolTip => CanAct
-        ? "勾选后可在预览中修复"
-        : "当前问题不支持自动修复";
+        ? LanguageManager.T("勾选后可在预览中修复")
+        : LanguageManager.T("当前问题不支持自动修复");
 
     public void SetCandidate(ResolutionCandidate? candidate)
     {
@@ -198,10 +206,25 @@ public sealed class ShortcutRow : ObservableObject
         OnPropertyChanged(nameof(Suggestion));
     }
 
-    private static string ConfidenceLabel(CandidateConfidence confidence) => confidence switch
+    public void RefreshLanguage()
+    {
+        OnPropertyChanged(nameof(StatusLabel));
+        OnPropertyChanged(nameof(Issues));
+        OnPropertyChanged(nameof(PrimaryTitle));
+        OnPropertyChanged(nameof(PrimarySummary));
+        OnPropertyChanged(nameof(CandidateDisplay));
+        OnPropertyChanged(nameof(CandidateReasons));
+        OnPropertyChanged(nameof(TargetDisplay));
+        OnPropertyChanged(nameof(WorkingDirectoryDisplay));
+        OnPropertyChanged(nameof(IconDisplay));
+        OnPropertyChanged(nameof(Suggestion));
+        OnPropertyChanged(nameof(CheckBoxToolTip));
+    }
+
+    private static string ConfidenceLabel(CandidateConfidence confidence) => LanguageManager.T(confidence switch
     {
         CandidateConfidence.High => "高",
         CandidateConfidence.Medium => "中",
         _ => "低"
-    };
+    });
 }

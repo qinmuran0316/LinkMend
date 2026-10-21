@@ -61,6 +61,7 @@ public sealed class MainViewModel : ObservableObject
         _backups = backups;
         _settingsStore = settingsStore;
         _settings = settingsStore.Load();
+        LanguageManager.SetLanguage(_settings.Language);
 
         CustomFolders = new ObservableCollection<string>(_settings.CustomFolders);
         BackUpRoot = backups.RootDirectory;
@@ -77,13 +78,15 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<HistoryRow> HistoryRows { get; } = new();
 
-    public IReadOnlyList<string> FilterOptions { get; } = new[]
+    public IReadOnlyList<string> FilterOptions => new[]
     {
-        FilterAll,
-        FilterProblems,
-        FilterActionable,
-        FilterHealthy
+        LanguageManager.T(FilterAll),
+        LanguageManager.T(FilterProblems),
+        LanguageManager.T(FilterActionable),
+        LanguageManager.T(FilterHealthy)
     };
+
+    public IReadOnlyList<string> LanguageOptions { get; } = new[] { "简体中文", "English" };
 
     public RelocationService RelocationService => _relocationService;
 
@@ -96,6 +99,36 @@ public sealed class MainViewModel : ObservableObject
     public string SettingsFilePath { get; }
 
     public string VersionText { get; }
+
+    public string VersionDisplay => $"{LanguageManager.T("当前版本：")}{VersionText}";
+
+    public string BackupRootDisplay => $"{LanguageManager.T("数据目录：")}{BackUpRoot}";
+
+    public string BackupHistoryDisplay => $"{LanguageManager.T("历史记录：")}{BackUpHistoryRoot}";
+
+    public string SettingsDisplay => $"{LanguageManager.T("设置文件：")}{SettingsFilePath}";
+
+    public string SelectedLanguage
+    {
+        get => string.Equals(_settings.Language, LanguageManager.English, StringComparison.OrdinalIgnoreCase)
+            ? "English"
+            : "简体中文";
+        set
+        {
+            var language = string.Equals(value, "English", StringComparison.OrdinalIgnoreCase)
+                ? LanguageManager.English
+                : LanguageManager.Chinese;
+            if (string.Equals(_settings.Language, language, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _settings.Language = language;
+            LanguageManager.SetLanguage(language);
+            SaveSettings();
+            RefreshLanguage();
+        }
+    }
 
     public bool ScanDesktop
     {
@@ -131,13 +164,13 @@ public sealed class MainViewModel : ObservableObject
 
     public string StatusText
     {
-        get => _statusText;
+        get => LanguageManager.T(_statusText);
         private set => SetProperty(ref _statusText, value);
     }
 
     public string ProgressText
     {
-        get => _progressText;
+        get => LanguageManager.T(_progressText);
         private set => SetProperty(ref _progressText, value);
     }
 
@@ -168,6 +201,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(CanInteract));
                 OnPropertyChanged(nameof(CanRepairSelected));
+                OnPropertyChanged(nameof(CanAutoRepair));
             }
         }
     }
@@ -214,6 +248,8 @@ public sealed class MainViewModel : ObservableObject
 
     public bool CanRepairSelected => CheckedCount > 0 && !IsBusy;
 
+    public bool CanAutoRepair => !IsBusy && AllRows.Any(row => row.CanAct);
+
     public bool HasRows => AllRows.Count > 0;
 
     public bool HasHistory => HistoryRows.Count > 0;
@@ -222,7 +258,7 @@ public sealed class MainViewModel : ObservableObject
 
     public string DroppedSummary => _droppedShortcuts.Count == 0
         ? ""
-        : $"已额外加入 {_droppedShortcuts.Count} 个快捷方式";
+        : LanguageManager.T($"已额外加入 {_droppedShortcuts.Count} 个快捷方式");
 
     public ShortcutRow? SelectedRow
     {
@@ -238,13 +274,46 @@ public sealed class MainViewModel : ObservableObject
 
     public string SelectedFilter
     {
-        get => _selectedFilter;
+        get => LanguageManager.T(_selectedFilter);
         set
         {
-            if (SetProperty(ref _selectedFilter, value))
+            var sourceValue = value switch
+            {
+                "All" => FilterAll,
+                "Needs attention" => FilterProblems,
+                "Actionable" => FilterActionable,
+                "Healthy" => FilterHealthy,
+                _ => value
+            };
+
+            if (SetProperty(ref _selectedFilter, sourceValue))
             {
                 ApplyFilter();
             }
+        }
+    }
+
+    public void RefreshLanguage()
+    {
+        OnPropertyChanged(nameof(FilterOptions));
+        OnPropertyChanged(nameof(SelectedFilter));
+        OnPropertyChanged(nameof(SelectedLanguage));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(DroppedSummary));
+        OnPropertyChanged(nameof(VersionDisplay));
+        OnPropertyChanged(nameof(BackupRootDisplay));
+        OnPropertyChanged(nameof(BackupHistoryDisplay));
+        OnPropertyChanged(nameof(SettingsDisplay));
+
+        foreach (var row in AllRows)
+        {
+            row.RefreshLanguage();
+        }
+
+        foreach (var row in HistoryRows)
+        {
+            row.RefreshLanguage();
         }
     }
 
@@ -312,6 +381,81 @@ public sealed class MainViewModel : ObservableObject
             }
 
             cts.Dispose();
+        }
+    }
+
+    public async Task<AutoRepairResult> AutoLocateAsync()
+    {
+        if (IsBusy)
+        {
+            throw new InvalidOperationException("当前正在执行任务，请稍候。");
+        }
+
+        var relocationRows = AllRows
+            .Where(row => row.CanAct && row.NeedsRelocation)
+            .ToArray();
+        var automaticRows = AllRows
+            .Where(row => row.CanAct && !row.NeedsRelocation)
+            .ToArray();
+
+        if (relocationRows.Length == 0 && automaticRows.Length == 0)
+        {
+            return new AutoRepairResult(Array.Empty<ShortcutRow>(), 0, 0, 0, 0);
+        }
+
+        IsBusy = true;
+        StatusText = "正在自动搜索程序位置…";
+        var roots = _settings.SearchRoots.ToArray();
+        var located = 0;
+        var ambiguous = 0;
+        var notFound = 0;
+        var selections = new List<(ShortcutRow Row, ResolutionCandidate Candidate)>();
+
+        try
+        {
+            foreach (var row in relocationRows)
+            {
+                var result = await Task.Run(() =>
+                    _relocationService.FindCandidates(row.Item, roots));
+                var candidate = RelocationService.SelectAutomaticCandidate(result);
+                if (candidate is null)
+                {
+                    if (result.Candidates.Count == 0)
+                    {
+                        notFound++;
+                    }
+                    else
+                    {
+                        ambiguous++;
+                    }
+
+                    continue;
+                }
+
+                selections.Add((row, candidate));
+                located++;
+            }
+
+            foreach (var (row, candidate) in selections)
+            {
+                row.SetCandidate(candidate);
+            }
+
+            var readyRows = automaticRows
+                .Concat(selections.Select(item => item.Row))
+                .Distinct()
+                .ToArray();
+            foreach (var row in readyRows)
+            {
+                row.IsChecked = true;
+            }
+
+            StatusText = $"自动搜索完成：找到 {located} 个程序，{ambiguous} 个结果需要确认，{notFound} 个未找到。";
+            return new AutoRepairResult(readyRows, relocationRows.Length, located, ambiguous, notFound);
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
@@ -596,6 +740,7 @@ public sealed class MainViewModel : ObservableObject
         RepairableCount = AllRows.Count(row => row.CanAct);
         CheckedCount = 0;
         OnPropertyChanged(nameof(HasRows));
+        OnPropertyChanged(nameof(CanAutoRepair));
 
         ApplyFilter();
         SelectedRow = Rows.FirstOrDefault(row => !row.IsHealthy) ?? Rows.FirstOrDefault();
@@ -651,6 +796,7 @@ public sealed class MainViewModel : ObservableObject
         RepairableCount = 0;
         CheckedCount = 0;
         OnPropertyChanged(nameof(HasRows));
+        OnPropertyChanged(nameof(CanAutoRepair));
     }
 
     private void ApplyFilter()
@@ -713,3 +859,10 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 }
+
+public sealed record AutoRepairResult(
+    IReadOnlyList<ShortcutRow> ReadyRows,
+    int RelocationCount,
+    int LocatedCount,
+    int AmbiguousCount,
+    int NotFoundCount);
