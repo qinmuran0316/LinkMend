@@ -3,6 +3,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+using System.Text;
+namespace LinkMend.InstallerSmoke {
+    public static class NativeMethods {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern uint GetLongPathName(string path, StringBuilder output, uint capacity);
+    }
+}
+'@
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $props = [xml](Get-Content -LiteralPath (Join-Path $repoRoot "Directory.Build.props"))
 $version = [string]($props.Project.PropertyGroup | Select-Object -First 1).Version
@@ -58,21 +68,40 @@ function Assert-Installed {
     if ($registration.DisplayVersion -ne $version) { throw "Incorrect uninstall registration version." }
     if ($registration.InstallLocation.TrimEnd('\') -ne $installDir) { throw "Incorrect registered installation directory." }
     if (-not (Test-Path -LiteralPath $startMenuLink -PathType Leaf)) { throw "Start Menu shortcut missing." }
-    $shortcut = $shell.CreateShortcut($startMenuLink)
-    try {
-        if ($shortcut.TargetPath -ne $installedExe) { throw "Start Menu shortcut points to the wrong application." }
-    }
-    finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) | Out-Null }
-    if ($testDesktop) {
-        $shortcut = $shell.CreateShortcut($desktopLink)
-        try {
-            if ($shortcut.TargetPath -ne $installedExe) { throw "Desktop shortcut points to the wrong application." }
-        }
-        finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) | Out-Null }
-    }
+    Assert-ShortcutTarget $startMenuLink
+    if ($testDesktop) { Assert-ShortcutTarget $desktopLink }
     if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $sentinelHash) {
         throw "Installation modified application data."
     }
+}
+
+function Get-LongFilePath {
+    param([string]$Path)
+
+    $output = New-Object Text.StringBuilder 32768
+    $length = [LinkMend.InstallerSmoke.NativeMethods]::GetLongPathName($Path, $output, $output.Capacity)
+    if ($length -eq 0 -or $length -ge $output.Capacity) {
+        throw "Cannot resolve shortcut path '$Path' (Win32 error $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))."
+    }
+    return $output.ToString()
+}
+
+function Assert-ShortcutTarget {
+    param([string]$ShortcutPath)
+
+    $shortcut = $shell.CreateShortcut($ShortcutPath)
+    try {
+        # WScript.Shell can return an equivalent 8.3 path on some Windows locales.
+        $actualTarget = Get-LongFilePath $shortcut.TargetPath
+        $expectedTarget = Get-LongFilePath $installedExe
+        if ($actualTarget -ne $expectedTarget) {
+            throw "Shortcut '$ShortcutPath' targets '$($shortcut.TargetPath)' instead of '$installedExe'."
+        }
+        if ((Get-FileHash -LiteralPath $actualTarget -Algorithm SHA256).Hash -ne $expectedExeHash) {
+            throw "Shortcut target does not match the published executable."
+        }
+    }
+    finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) | Out-Null }
 }
 
 try {
