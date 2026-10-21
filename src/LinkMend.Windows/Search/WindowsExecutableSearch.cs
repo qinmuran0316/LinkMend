@@ -31,6 +31,7 @@ public sealed class WindowsExecutableSearch : IExecutableSearch
         int maxDepth,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var results = new List<string>();
         if (string.IsNullOrWhiteSpace(root)
             || string.IsNullOrWhiteSpace(fileName)
@@ -55,6 +56,11 @@ public sealed class WindowsExecutableSearch : IExecutableSearch
 
             try
             {
+                if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                {
+                    continue;
+                }
+
                 var options = new EnumerationOptions
                 {
                     RecurseSubdirectories = false,
@@ -66,6 +72,7 @@ public sealed class WindowsExecutableSearch : IExecutableSearch
 
                 foreach (var file in Directory.EnumerateFiles(directory, fileName, options))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (string.Equals(Path.GetFileName(file), fileName, StringComparison.OrdinalIgnoreCase))
                     {
                         results.Add(file);

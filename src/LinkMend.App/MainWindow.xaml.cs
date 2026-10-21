@@ -23,7 +23,10 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         Loaded += OnLoaded;
-        Closing += (_, _) => _viewModel.CancelScan();
+        Closing += (_, args) =>
+        {
+            args.Cancel = !_viewModel.TryPrepareToClose();
+        };
     }
 
     protected override void OnSourceInitialized(EventArgs e)

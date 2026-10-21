@@ -22,17 +22,25 @@ public sealed class RepairService
     {
         var results = new List<RepairItemResult>();
         var preflight = new List<PreflightPlan>();
+        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var plan in plans)
         {
             var shortcutPath = plan.Item.Link.FilePath;
+            if (!PathResolver.IsShortcutFilePath(shortcutPath)
+                || !seenPaths.Add(PathResolver.NormalizeKey(shortcutPath)))
+            {
+                results.Add(Skipped(plan, "快捷方式路径无效或重复，未执行修改。"));
+                continue;
+            }
+
             if (!plan.HasChanges)
             {
                 results.Add(Skipped(plan, "没有可应用的修改。"));
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(plan.ExpectedHash))
+            if (!FileHash.IsValid(plan.ExpectedHash))
             {
                 results.Add(Skipped(plan, "缺少扫描时的文件校验值，请重新扫描。"));
                 continue;
@@ -99,6 +107,7 @@ public sealed class RepairService
             var plan = entry.Plan;
             var backupItem = batch.Items[index];
             var shortcutPath = plan.Item.Link.FilePath;
+            string? writtenHash = null;
 
             try
             {
@@ -117,7 +126,8 @@ public sealed class RepairService
                     continue;
                 }
 
-                _store.Apply(shortcutPath, plan.ToPatch());
+                writtenHash = _store.Apply(shortcutPath, plan.ToPatch());
+                FileHash.EnsureMatches(shortcutPath, writtenHash);
 
                 var readBack = _store.Read(shortcutPath);
                 var verificationError = Verify(plan, readBack);
@@ -128,6 +138,10 @@ public sealed class RepairService
 
                 var actual = readBack.Link!;
                 var resultHash = FileHash.Compute(shortcutPath);
+                if (!string.Equals(resultHash, writtenHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new FileChangedException("写入后快捷方式再次发生变化，已保留新内容。");
+                }
 
                 backupItem.Status = BackupStatuses.Repaired;
                 backupItem.ResultHash = resultHash;
@@ -145,8 +159,11 @@ public sealed class RepairService
             }
             catch (Exception ex)
             {
-                var restoreMessage = RestoreOriginal(batch, backupItem);
+                var restoreMessage = writtenHash is null
+                    ? "未覆盖原快捷方式。"
+                    : RestoreOriginal(batch, backupItem, writtenHash);
                 backupItem.Status = BackupStatuses.Failed;
+                backupItem.ResultHash = null;
                 backupItem.Message = $"{ex.Message} {restoreMessage}";
                 TrySave(batch);
 
@@ -161,7 +178,7 @@ public sealed class RepairService
         return new RepairOutcome(batch.Id, results, Array.Empty<UndoConflict>());
     }
 
-    private string RestoreOriginal(BackupBatch batch, BackupItem item)
+    private string RestoreOriginal(BackupBatch batch, BackupItem item, string writtenHash)
     {
         try
         {
@@ -172,7 +189,7 @@ public sealed class RepairService
                 return "自动恢复失败：备份文件校验不一致，请从备份目录手动恢复。";
             }
 
-            AtomicFile.WriteAllBytes(item.ShortcutPath, original);
+            AtomicFile.WriteAllBytes(item.ShortcutPath, original, writtenHash);
             var restoredHash = FileHash.Compute(item.ShortcutPath);
             if (!string.Equals(restoredHash, item.OriginalHash, StringComparison.OrdinalIgnoreCase))
             {

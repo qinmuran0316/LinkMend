@@ -117,6 +117,36 @@ public sealed class RepairPlanBuilderTests
     }
 
     [Fact]
+    public void Build_ManualOnlyProblemWithCandidate_DoesNotRetarget()
+    {
+        var probe = new FakeSystemProbe();
+        probe.SetFile(NewTarget);
+        var diagnosis = DiagnosisResult.FromIssues(new[]
+        {
+            new ShortcutIssue(IssueCodes.TargetUnavailable, IssueSeverity.Warning,
+                "磁盘离线", "测试", Array.Empty<string>(), IssueHandling.Manual)
+        });
+        var item = CreateItem(OldTarget, diagnosis: diagnosis);
+        var candidate = new ResolutionCandidate(NewTarget, 90, CandidateConfidence.High, Array.Empty<string>(), null);
+
+        Assert.Null(new RepairPlanBuilder(probe).Build(item, candidate));
+    }
+
+    [Fact]
+    public void Build_AutoFixWithoutHash_IsNotActionable()
+    {
+        var diagnosis = DiagnosisResult.FromIssues(new[]
+        {
+            new ShortcutIssue(IssueCodes.IconSourceMissing, IssueSeverity.Warning,
+                "图标丢失", "测试", Array.Empty<string>(), IssueHandling.AutoFix)
+        });
+        var item = CreateItem(NewTarget, diagnosis: diagnosis) with { ContentHash = "" };
+
+        Assert.False(item.CanBuildAutomaticPlan);
+        Assert.Null(new RepairPlanBuilder(new FakeSystemProbe()).Build(item, null));
+    }
+
+    [Fact]
     public void Build_ManualOnlyProblem_ReturnsNull()
     {
         var probe = new FakeSystemProbe();

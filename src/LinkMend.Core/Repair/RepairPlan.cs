@@ -14,7 +14,7 @@ public sealed record RepairPlan(
     public bool HasChanges =>
         TargetPath is not null || WorkingDirectory is not null || Icon is not null;
 
-    public ShortcutPatch ToPatch() => new(TargetPath, WorkingDirectory, Icon);
+    public ShortcutPatch ToPatch() => new(TargetPath, WorkingDirectory, Icon, ExpectedHash);
 
     public string FileName => Item.Link.FileName;
 }

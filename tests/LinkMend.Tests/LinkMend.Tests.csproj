@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,10 +19,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\LinkMend.Core\LinkMend.Core.csproj" />
     <ProjectReference Include="..\..\src\LinkMend.Windows\LinkMend.Windows.csproj" />
+    <ProjectReference Include="..\..\src\LinkMend.App\LinkMend.App.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="System.IO" />
   </ItemGroup>
 
 </Project>

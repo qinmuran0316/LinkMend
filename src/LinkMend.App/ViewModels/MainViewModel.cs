@@ -66,7 +66,7 @@ public sealed class MainViewModel : ObservableObject
         BackUpRoot = backups.RootDirectory;
         BackUpHistoryRoot = backups.HistoryDirectory;
         SettingsFilePath = settingsStore.SettingsFilePath;
-        VersionText = $"v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0"}";
+        VersionText = $"v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)}";
     }
 
     public ObservableCollection<ShortcutRow> AllRows { get; } = new();
@@ -173,6 +173,8 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool CanInteract => !IsBusy;
+
+    public bool IsWritingFiles => IsBusy && _scanCts is null;
 
     public int ScannedCount
     {
@@ -322,6 +324,18 @@ public sealed class MainViewModel : ObservableObject
 
         StatusText = "正在取消…";
         _scanCts.Cancel();
+    }
+
+    public bool TryPrepareToClose()
+    {
+        if (IsWritingFiles)
+        {
+            StatusText = "正在完成文件写入，请完成后再关闭窗口。";
+            return false;
+        }
+
+        CancelScan();
+        return true;
     }
 
     public bool AddCustomFolder(string path)
@@ -482,19 +496,12 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var allBatches = await Task.Run(_backups.LoadAll);
-            var undoneIds = new HashSet<string>(
-                allBatches
-                    .Where(batch => batch.Operation == BackupOperations.Undo
-                                    && !string.IsNullOrWhiteSpace(batch.UndoesBatchId)
-                                    && batch.Items.Any(item => item.Status == BackupStatuses.Restored))
-                    .Select(batch => batch.UndoesBatchId!),
-                StringComparer.Ordinal);
-
             var selectedId = SelectedHistory?.Batch.Id;
             HistoryRows.Clear();
             foreach (var batch in allBatches)
             {
-                HistoryRows.Add(new HistoryRow(batch, undoneIds.Contains(batch.Id)));
+                HistoryRows.Add(new HistoryRow(batch, _backups.HasUndoBatch(allBatches, batch.Id),
+                    _backups.GetRemainingUndoItems(batch, allBatches).Count));
             }
 
             SelectedHistory = selectedId is null
@@ -512,7 +519,8 @@ public sealed class MainViewModel : ObservableObject
     public async Task<UndoPreview> PreviewUndoAsync(HistoryRow row)
     {
         var allBatches = await Task.Run(_backups.LoadAll);
-        var batch = allBatches.FirstOrDefault(item => item.Id == row.Batch.Id) ?? row.Batch;
+        var batch = allBatches.FirstOrDefault(item => item.Id == row.Batch.Id)
+                    ?? throw new InvalidOperationException("修复记录已被删除或损坏，请刷新修复历史。");
         return await Task.Run(() => _undoService.Preview(batch, allBatches));
     }
 
@@ -528,7 +536,8 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var allBatches = await Task.Run(_backups.LoadAll);
-            var batch = allBatches.FirstOrDefault(item => item.Id == row.Batch.Id) ?? row.Batch;
+            var batch = allBatches.FirstOrDefault(item => item.Id == row.Batch.Id)
+                        ?? throw new InvalidOperationException("修复记录已被删除或损坏，请刷新修复历史。");
             var outcome = await Task.Run(() => _undoService.Undo(batch, allBatches));
             StatusText = outcome.Message;
             await RefreshHistoryAsync();

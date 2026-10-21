@@ -4,6 +4,31 @@ namespace LinkMend.Core.Paths;
 
 public static class FileHash
 {
+    public static bool IsValid(string? hash) =>
+        hash is { Length: 64 } && hash.All(char.IsAsciiHexDigit);
+
+    public static void EnsureMatches(string path, string expectedHash)
+    {
+        if (!IsValid(expectedHash))
+        {
+            throw new ArgumentException("无效的文件校验值。", nameof(expectedHash));
+        }
+
+        try
+        {
+            if (string.Equals(Compute(path), expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new FileChangedException("快捷方式已被删除或移动，未执行覆盖。");
+        }
+
+        throw new FileChangedException("快捷方式内容发生变化，未执行覆盖。请重新扫描。");
+    }
+
     public static string Compute(ReadOnlySpan<byte> data) =>
         Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
 

@@ -1,5 +1,7 @@
 param(
+    [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
+    [ValidateSet("win-x64", "win-arm64", "win-x86")]
     [string]$Runtime = "win-x64"
 )
 
@@ -15,13 +17,17 @@ if ([string]::IsNullOrWhiteSpace($version)) {
     throw "Version was not found in Directory.Build.props."
 }
 
-$publishDir = Join-Path $repoRoot "artifacts\publish\LinkMend-$Runtime"
+$publishRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "artifacts\publish"))
+$publishDir = [System.IO.Path]::GetFullPath((Join-Path $publishRoot "LinkMend-$Runtime"))
+if (-not $publishDir.StartsWith($publishRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "The publish directory must remain inside artifacts\publish."
+}
 $releaseDir = Join-Path $repoRoot "artifacts\release"
 $zipPath = Join-Path $releaseDir "LinkMend-v$version-$Runtime.zip"
 
 New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-if (Test-Path $publishDir) {
-    Remove-Item -Recurse -Force $publishDir
+if (Test-Path -LiteralPath $publishDir) {
+    Remove-Item -LiteralPath $publishDir -Recurse -Force
 }
 
 dotnet publish (Join-Path $repoRoot "src\LinkMend.App\LinkMend.App.csproj") `
@@ -43,8 +49,8 @@ Copy-Item (Join-Path $repoRoot "README.md") $publishDir -Force
 Copy-Item (Join-Path $repoRoot "CHANGELOG.md") $publishDir -Force
 Copy-Item (Join-Path $repoRoot "LICENSE") $publishDir -Force
 
-if (Test-Path $zipPath) {
-    Remove-Item -Force $zipPath
+if (Test-Path -LiteralPath $zipPath) {
+    Remove-Item -LiteralPath $zipPath -Force
 }
 
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -CompressionLevel Optimal

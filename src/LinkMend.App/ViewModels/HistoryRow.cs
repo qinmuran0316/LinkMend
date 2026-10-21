@@ -5,16 +5,19 @@ namespace LinkMend.App.ViewModels;
 
 public sealed class HistoryRow
 {
-    public HistoryRow(BackupBatch batch, bool isUndone)
+    public HistoryRow(BackupBatch batch, bool isUndone, int? remainingUndoCount = null)
     {
         Batch = batch;
         IsUndone = isUndone;
+        RemainingUndoCount = remainingUndoCount ?? (isUndone ? 0 : batch.RepairedCount);
         Items = batch.Items.Select(item => new HistoryItemRow(item)).ToArray();
     }
 
     public BackupBatch Batch { get; }
 
     public bool IsUndone { get; }
+
+    public int RemainingUndoCount { get; }
 
     public IReadOnlyList<HistoryItemRow> Items { get; }
 
@@ -28,6 +31,11 @@ public sealed class HistoryRow
         {
             if (Batch.Operation == BackupOperations.Undo)
             {
+                if (Batch.PendingCount > 0)
+                {
+                    return "未完成";
+                }
+
                 var restored = Batch.Items.Count(item => item.Status == BackupStatuses.Restored);
                 if (restored > 0 && Batch.FailedCount == 0)
                 {
@@ -47,6 +55,11 @@ public sealed class HistoryRow
                 return "未完成";
             }
 
+            if (RemainingUndoCount > 0 && RemainingUndoCount < Batch.RepairedCount)
+            {
+                return "部分撤销";
+            }
+
             if (Batch.RepairedCount == 0)
             {
                 return "失败";
@@ -60,7 +73,7 @@ public sealed class HistoryRow
         Batch.Operation == BackupOperations.Repair
         && !IsUndone
         && Batch.PendingCount == 0
-        && Batch.RepairedCount > 0;
+        && RemainingUndoCount > 0;
 
     public string Summary
     {
@@ -72,7 +85,7 @@ public sealed class HistoryRow
                 return $"{Batch.Items.Count} 个快捷方式 · 已恢复 {restored} · 失败 {Batch.FailedCount}";
             }
 
-            return $"{Batch.Items.Count} 个快捷方式 · 成功 {Batch.RepairedCount} · 失败 {Batch.FailedCount}";
+            return $"{Batch.Items.Count} 个快捷方式 · 成功 {Batch.RepairedCount} · 失败 {Batch.FailedCount} · 待撤销 {RemainingUndoCount}";
         }
     }
 
@@ -91,7 +104,7 @@ public sealed class HistoryRow
 
             if (CanUndo)
             {
-                return $"撤销会恢复 {Batch.RepairedCount} 个快捷方式到此批次修复前的状态。";
+                return $"撤销会恢复剩余 {RemainingUndoCount} 个快捷方式到此批次修复前的状态。";
             }
 
             return StateLabel switch

@@ -21,7 +21,8 @@ public sealed class ShortcutScanner
         IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var files = CollectShortcutFiles(request, out var skippedItems);
+        cancellationToken.ThrowIfCancellationRequested();
+        var files = CollectShortcutFiles(request, cancellationToken, out var skippedItems);
         var total = files.Count;
         var processed = 0;
         var failedReads = 0;
@@ -34,6 +35,7 @@ public sealed class ShortcutScanner
             cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new ScanProgress(processed, total, file.FilePath));
 
+            var hashBeforeReadOk = FileHash.TryCompute(file.FilePath, out var hashBeforeRead, out var hashBeforeReadError);
             var read = _store.Read(file.FilePath);
             if (!read.Success || read.Link is null)
             {
@@ -61,6 +63,17 @@ public sealed class ShortcutScanner
 
             var paths = PathResolver.Resolve(read.Link);
             var hashOk = FileHash.TryCompute(file.FilePath, out var hash, out var hashError);
+            if (!hashBeforeReadOk)
+            {
+                hashOk = false;
+                hashError = hashBeforeReadError;
+            }
+            else if (hashOk && !string.Equals(hashBeforeRead, hash, StringComparison.OrdinalIgnoreCase))
+            {
+                hashOk = false;
+                hashError = "快捷方式在读取期间发生变化，请重新扫描后再修复。";
+            }
+
             var readLink = read.Link;
             pending.Add(new PendingShortcut(
                 new ScannedShortcut(
@@ -109,6 +122,7 @@ public sealed class ShortcutScanner
             results.Add(scanned);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new ScanProgress(total, total, "扫描完成"));
 
         return new ScanResult(
@@ -123,6 +137,7 @@ public sealed class ShortcutScanner
 
     private static List<ShortcutFile> CollectShortcutFiles(
         ScanRequest request,
+        CancellationToken cancellationToken,
         out int skippedItems)
     {
         var files = new Dictionary<string, ShortcutFile>(StringComparer.OrdinalIgnoreCase);
@@ -130,6 +145,7 @@ public sealed class ShortcutScanner
 
         foreach (var root in request.Roots)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(root.DirectoryPath) || !Directory.Exists(root.DirectoryPath))
             {
                 skipped++;
@@ -147,8 +163,15 @@ public sealed class ShortcutScanner
 
             try
             {
+                if ((File.GetAttributes(root.DirectoryPath) & FileAttributes.ReparsePoint) != 0)
+                {
+                    skipped++;
+                    continue;
+                }
+
                 foreach (var path in Directory.EnumerateFiles(root.DirectoryPath, "*.lnk", options))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (!path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
@@ -165,6 +188,7 @@ public sealed class ShortcutScanner
 
         foreach (var path in request.ExplicitShortcutFiles)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(path)
                 || !path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
                 || !File.Exists(path))
@@ -187,8 +211,14 @@ public sealed class ShortcutScanner
             try
             {
                 fullPath = Path.GetFullPath(path);
+                if (!PathResolver.IsShortcutFilePath(fullPath)
+                    || (File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
+                {
+                    skipped++;
+                    return;
+                }
             }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
             {
                 skipped++;
                 return;

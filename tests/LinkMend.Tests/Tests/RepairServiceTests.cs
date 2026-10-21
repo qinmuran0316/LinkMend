@@ -82,6 +82,49 @@ public sealed class RepairServiceTests
     }
 
     [Fact]
+    public void Apply_WhenAnotherWriterChangesResult_PreservesTheirBytes()
+    {
+        using var fixture = CreateFixture();
+        var plan = fixture.CreatePlan(@"C:\New\Demo\demo.exe");
+        fixture.Store.AfterApply = path => File.WriteAllText(path, "later-user-change");
+
+        var outcome = fixture.Service.Apply(new[] { plan });
+
+        Assert.Equal(1, outcome.FailedCount);
+        Assert.Equal("later-user-change", File.ReadAllText(fixture.LinkPath));
+        Assert.Equal(BackupStatuses.Failed, Assert.Single(fixture.Backups.LoadAll()).Items[0].Status);
+    }
+
+    [Fact]
+    public void Apply_DuplicatePlans_ModifiesFileOnlyOnce()
+    {
+        using var fixture = CreateFixture();
+        var plan = fixture.CreatePlan(@"C:\New\Demo\demo.exe");
+
+        var outcome = fixture.Service.Apply(new[] { plan, plan });
+
+        Assert.Equal(1, outcome.RepairedCount);
+        Assert.Equal(1, outcome.SkippedCount);
+        Assert.Equal(1, fixture.Store.ApplyCount);
+        Assert.Single(Assert.Single(fixture.Backups.LoadAll()).Items);
+    }
+
+    [Fact]
+    public void Apply_WhenStoreFailsBeforeWriting_LeavesOriginalUntouched()
+    {
+        using var fixture = CreateFixture();
+        var original = File.ReadAllBytes(fixture.LinkPath);
+        var plan = fixture.CreatePlan(@"C:\New\Demo\demo.exe");
+        fixture.Store.ApplyFailure = "模拟写入前失败";
+
+        var outcome = fixture.Service.Apply(new[] { plan });
+
+        Assert.Equal(1, outcome.FailedCount);
+        Assert.Equal(original, File.ReadAllBytes(fixture.LinkPath));
+        Assert.Contains("未覆盖", Assert.Single(outcome.Items).Message);
+    }
+
+    [Fact]
     public void Undo_RestoresOriginalBytesAndRecordsUndoBatch()
     {
         using var fixture = CreateFixture();

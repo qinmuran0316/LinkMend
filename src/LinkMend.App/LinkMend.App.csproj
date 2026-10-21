@@ -9,7 +9,6 @@
     <AssemblyName>LinkMend</AssemblyName>
     <RootNamespace>LinkMend.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
     <ApplicationIcon>Assets\LinkMend.ico</ApplicationIcon>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>

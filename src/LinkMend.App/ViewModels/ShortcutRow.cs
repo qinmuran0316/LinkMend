@@ -60,14 +60,12 @@ public sealed class ShortcutRow : ObservableObject
 
     public bool HasAutoFix => Item.Diagnosis.HasAutoFix;
 
-    public bool CanAct =>
-        !string.IsNullOrWhiteSpace(Item.ContentHash)
-        && (NeedsRelocation || HasAutoFix);
+    public bool CanAct => Item.CanBuildAutomaticPlan;
 
     public bool IsSelectable => CanAct;
 
     public bool CanApplyFix =>
-        HasAutoFix || (NeedsRelocation && SelectedCandidate is not null);
+        CanAct && (HasAutoFix || (NeedsRelocation && SelectedCandidate is not null));
 
     public bool IsChecked
     {

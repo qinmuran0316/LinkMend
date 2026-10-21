@@ -2,7 +2,7 @@ namespace LinkMend.Core.Paths;
 
 public static class AtomicFile
 {
-    public static void WriteAllBytes(string destinationPath, ReadOnlySpan<byte> data)
+    public static void WriteAllBytes(string destinationPath, ReadOnlySpan<byte> data, string? expectedHash = null)
     {
         var directory = Path.GetDirectoryName(destinationPath);
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
@@ -28,16 +28,13 @@ public static class AtomicFile
                 stream.Flush(flushToDisk: true);
             }
 
-            if (File.Exists(destinationPath))
+            if (expectedHash is not null)
             {
-                try
-                {
-                    File.Replace(temporaryPath, destinationPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
-                }
-                catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
-                {
-                    File.Move(temporaryPath, destinationPath, overwrite: true);
-                }
+                ReplaceExisting(temporaryPath, destinationPath, expectedHash);
+            }
+            else if (File.Exists(destinationPath))
+            {
+                File.Replace(temporaryPath, destinationPath, destinationBackupFileName: null);
             }
             else
             {
@@ -58,5 +55,17 @@ public static class AtomicFile
                 // A stale temp file is harmless; the operation result is already known.
             }
         }
+    }
+
+    public static void ReplaceExisting(string temporaryPath, string destinationPath, string expectedHash)
+    {
+        FileHash.EnsureMatches(destinationPath, expectedHash);
+        if ((File.GetAttributes(destinationPath) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new FileChangedException("快捷方式是重解析点，未执行覆盖。");
+        }
+
+        // Fail closed if replacement or metadata preservation is not supported.
+        File.Replace(temporaryPath, destinationPath, destinationBackupFileName: null);
     }
 }

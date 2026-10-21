@@ -56,6 +56,34 @@ public sealed class ShortcutScannerTests
     }
 
     [Fact]
+    public void Scan_WhenCanceledWithEmptyScope_ThrowsCancellation()
+    {
+        var scanner = new ShortcutScanner(new FakeShortcutStore(), new ShortcutDiagnoser(new FakeSystemProbe()));
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => scanner.Scan(
+            new ScanRequest(Array.Empty<ScanRoot>(), Array.Empty<string>()), null, source.Token));
+    }
+
+    [Fact]
+    public void Scan_WhenFileChangesDuringRead_DisablesAutomaticRepair()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.CreateFile("Demo.lnk", "original-bytes");
+        var store = new FakeShortcutStore();
+        store.Links[path] = new ShortcutLink { FilePath = path, TargetPath = @"C:\Missing\demo.exe" };
+        store.OnRead = file => File.WriteAllText(file, "changed-during-read");
+        var scanner = new ShortcutScanner(store, new ShortcutDiagnoser(new FakeSystemProbe()));
+
+        var result = scanner.Scan(new ScanRequest(Array.Empty<ScanRoot>(), new[] { path }), null, CancellationToken.None);
+
+        var shortcut = Assert.Single(result.Shortcuts);
+        Assert.Empty(shortcut.ContentHash);
+        Assert.Contains(shortcut.Diagnosis.Issues, issue => issue.Code == IssueCodes.HashUnavailable);
+    }
+
+    [Fact]
     public void Scan_EmptyScope_ReturnsEmptyResult()
     {
         using var temp = new TempDirectory();

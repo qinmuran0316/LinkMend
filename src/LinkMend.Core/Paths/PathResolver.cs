@@ -4,6 +4,30 @@ namespace LinkMend.Core.Paths;
 
 public static class PathResolver
 {
+    public static bool IsShortcutFilePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)
+            || !Path.IsPathFullyQualified(path)
+            || !path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(@"\\?\", StringComparison.Ordinal)
+            || path.StartsWith(@"\\.\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(fullPath) ?? "";
+            return !fullPath[root.Length..].Contains(':')
+                   && fullPath.IndexOfAny(Path.GetInvalidPathChars()) < 0;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     private static readonly HashSet<string> IconCapableExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".exe", ".dll", ".ico", ".cpl", ".scr", ".ocx"

@@ -31,7 +31,7 @@ LinkMend 面向常见的“快捷方式坏了”场景：目标程序被移动�
 | 搬家定位 | 结合 App Paths、卸载记录和有限目录扫描，给出候选程序与证据，由用户选择 |
 | 数据目录检查 | 分析显式启动参数，报告不可用目录和同目标快捷方式之间的配置冲突，不自动改参数 |
 | 修复预览 | 逐字段展示目标、起始位置、图标的修改前后值 |
-| 安全修复 | 修复前备份原始 `.lnk`，写入后重新读取验证；验证失败自动恢复 |
+| 安全修复 | 修复前备份原始 `.lnk`，写入后重新读取验证；验证失败且文件仍为本次写入的内容时自动恢复 |
 | 撤销 | 按批次撤销；撤销前检查文件是否在修复后又被修改，发现变化则停止 |
 | 审计 | 修复与撤销历史保存在本地，包含快照、校验值和每项结果 |
 
@@ -56,8 +56,8 @@ LinkMend 把“准确判断”和“安全写入”拆成独立步骤：
 3. **不自动选择候选。** 同名程序可能有多个；界面展示路径、可信度、元数据和匹配理由，最终由用户确认。
 4. **修改前先备份。** 原始 `.lnk` 字节和 SHA-256 写入本地批次目录；历史记录同时保存修改前后的字段。
 5. **扫描后若文件变化，拒绝覆盖。** 修复前会重新计算当前哈希；与扫描时不一致就跳过。
-6. **写入后重新读取验证。** 目标、起始位置、图标不符合预期时自动用快照恢复。
-7. **撤销不覆盖新变化。** 撤销前逐一比对当前文件哈希与修复后的哈希；任何冲突都会中止整次撤销并列出原因。
+6. **写入后重新读取验证。** 目标、起始位置、图标不符合预期时，仅在文件仍匹配本次写入的内容时用快照恢复；其他程序的新修改或删除会被保留。
+7. **撤销前整批检查。** 比对所有待撤销文件与修复后的哈希，并校验原始快照；预检发现冲突则整批停止。执行中遇到新的冲突或 I/O 失败可能部分完成，剩余项目可重试。
 8. **不主动提权。** 应用以当前用户权限运行；权限不足会如实提示，需要时由用户自行决定是否以管理员身份运行。
 
 ### 快速开始
@@ -67,9 +67,23 @@ LinkMend 把“准确判断”和“安全写入”拆成独立步骤：
 - Windows 10 1809+ 或 Windows 11，x64
 - 运行时采用自包含发布时，用户不需要预装 .NET；从源码构建需要 **.NET 10 SDK**
 
+#### 下载并运行（免安装）
+
+1. 登录 GitHub，打开 [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml)。
+2. 选择 `main` 分支上带绿色勾的成功运行记录；如果刚推送代码，请等待构建完成。
+3. 在该次运行页面的 **Artifacts** 区域下载 **LinkMend-win-x64**。
+4. 解压下载的构建产物；其中包含版本发布包，例如 `LinkMend-v0.1.1-win-x64.zip`，再将它解压到普通文件夹。
+5. 双击解压目录中的 **`LinkMend.exe`**。这是自包含版本，无需安装 .NET，也无需先安装本工具。
+
+若下载按钮不可用，请确认已登录；若产物已过期，可使用较新的成功构建，或按下方步骤从源码生成。GitHub 的操作说明见 [下载工作流产物](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)。
+
+更新版本时先关闭旧程序，再解压并运行新包。备份、历史和设置位于 `%LOCALAPPDATA%\LinkMend`，不随程序解压目录变化；需要撤销时请保留这些数据。
+
 #### 从源码构建
 
 ```powershell
+git clone https://github.com/qinmuran0316/LinkMend.git
+cd LinkMend
 dotnet restore LinkMend.slnx
 dotnet build LinkMend.slnx -c Release
 dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj -c Release
@@ -85,22 +99,43 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 输出：
 
 ```text
-artifacts/release/LinkMend-v0.1.0-win-x64.zip
+artifacts/release/LinkMend-v0.1.1-win-x64.zip
 ```
 
 发布包为自包含单文件 WPF 应用，解压后运行 `LinkMend.exe` 即可。GitHub Actions 也会在每次构建时上传同名 ZIP 作为构建产物。
 
-### 使用流程
+### 使用方法
 
-1. 选择桌面、开始菜单，或添加你要检查的文件夹；也可以把 `.lnk` 文件/文件夹拖入窗口。
-2. 点击“开始检查”。扫描只读取快捷方式，不会启动任何程序。
-3. 在左侧查看问题列表，在右侧阅读判断依据、路径对照和建议。
-   - 勾选可自动修复的项，然后点击“预览并修复已选”。
-   - 目标丢失的项先点击“查找新位置”，确认候选后再修复。
-4. 在预览窗口逐项确认修改前后的值，再应用修复。
-5. 在“修复历史”中查看备份或撤销整个批次。
+#### 1. 选择范围并检查
 
-> 只有“目标丢失”才会进入新位置搜索。磁盘离线、权限不足等情况需先恢复访问后重新扫描，避免把可恢复的配置永久改坏。
+打开 **诊断与修复**，勾选 **桌面**、**开始菜单**；其他位置使用 **+ 添加文件夹**。也可以把 `.lnk` 文件或含有快捷方式的文件夹拖入窗口，再点击 **开始检查**。只扫描你选择的范围，不会启动目标程序；扫描期间可以点击 **取消检查**。
+
+检查结束后，点击左侧的问题项，在右侧查看原目标、图标、起始位置及判断依据。磁盘离线、网络不可达或权限不足的项目，应先恢复访问再重新检查。数据目录冲突只提供提示，需要自行核对程序的启动参数。
+
+#### 2. 修复图标或起始位置
+
+对有可应用建议的项目勾选复选框，再点击 **预览并修复已选**；也可选中单项后点击 **修复此项**。**全选可处理** 用于批量选择，**清空选择** 用于取消勾选。目标丢失的项目需要先完成下一步的新位置确认。
+
+#### 3. 为搬家的程序定位新目标
+
+1. 选中“目标丢失”的项目，点击 **查找新位置**，等待候选列表加载。
+2. 核对候选的完整路径、产品名、发布者和匹配理由。若没有找到，点击 **添加目录** 选择软件的新安装目录，等待搜索；需要再查时点击 **重新搜索**。
+3. 选中正确的候选，点击 **使用选中位置** 返回主窗口。此时只记录了你的选择，尚未修改快捷方式。
+4. 点击 **修复此项** 或 **预览并修复已选** 进入预览。
+
+例如：原目标为 `D:\Apps\Example\Example.exe`，程序已移动到 `E:\Software\Example\Example.exe`。添加 `E:\Software\Example` 搜索，选中该程序并核对预览中的新目标，再应用修复。若程序已卸载且没有候选，请先重新安装程序或手动重建快捷方式。
+
+#### 4. 确认预览并应用
+
+在 **预览修复** 窗口逐项核对“修改前 / 修改后”的目标、起始位置和图标。确认后点击 **应用修复**；点击 **取消** 会放弃本次预览。工具会先备份原始 `.lnk`，再修改并校验结果；结果窗口会列出成功、失败和跳过的项目。存在成功项时会自动重新检查。
+
+若提示“文件发生变化”，请重新检查后再选择修复，避免使用过期的诊断结果。修复和撤销写入期间，关闭窗口会被暂时阻止，请等待结果。
+
+#### 5. 查看历史与撤销
+
+打开 **修复历史**，选中要恢复的修复批次，查看每项结果后点击 **撤销此批次**，在确认框中确认。使用 **打开备份目录** 可查看原始快照；默认数据目录为 `%LOCALAPPDATA%\LinkMend`。
+
+撤销前若发现文件已修改、已删除或快照损坏，会显示冲突并整批停止；请按提示处理，保留你需要的新内容。执行中发生新的冲突或 I/O 错误时可能只完成一部分：选择显示 **部分撤销** 的原修复批次，查看 **待撤销** 数量，处理失败原因后再次点击 **撤销此批次**，只重试剩余项目。已全部撤销的批次不能重复撤销。
 
 ### 诊断规则
 
@@ -186,6 +221,8 @@ scripts/
 
 更多设计细节见 [docs/architecture.md](docs/architecture.md)。
 
+0.1.1 的问题检查、修复与验证记录见 [docs/review-0.1.1.md](docs/review-0.1.1.md)。
+
 ### 测试
 
 ```powershell
@@ -200,8 +237,9 @@ dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj --nologo
 - 候选排序、去重、取消和文件消失；
 - 预览计划生成；
 - 修复备份、扫描后变化拒绝、写入校验失败自动回滚；
-- 撤销成功、修复后再次变化拒绝撤销、重复撤销拒绝；
-- 备份路径穿越防护、带 BOM 的历史文件；
+- 撤销成功、修复后再次变化拒绝撤销、部分撤销重试、重复撤销拒绝；
+- 读取期间变化、提交前删除/修改、快照损坏时整批停止；
+- 备份路径穿越防护、特殊 Windows 文件名、异常历史结构和带 BOM 的历史文件；
 - 通过真实 `IShellLink` / `WScript.Shell` 创建、读取、修改和清除图标。
 
 ### 数据位置
@@ -226,7 +264,7 @@ dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj --nologo
 - 不清理 Windows 图标缓存，因此“路径都正常但图标仍白”的情况会保留原状。
 - 不搜索全盘；搜索范围有限，找不到时请添加软件所在目录。
 - 同名程序的元数据可能相同，最终需要用户确认，不能保证语义上一定是同一个程序。
-- 撤销以批次为单位；批次内任一文件在修复后被修改，整次撤销会停止。
+- 撤销前整批校验剩余文件与快照；发现冲突则停止。执行中遇到新的冲突或 I/O 失败可能部分完成，可继续撤销剩余项目。
 - 备份未加密，能读取当前用户 `%LOCALAPPDATA%` 的其他进程也可能读取这些快照。
 - LinkMend 使用 ShellLink 加载并保存 `.lnk`；不理解的 Shell 扩展字段是否保留取决于系统实现，因此所有写入都有备份。
 - 扫描是只读的，但网络路径不可达时单次文件探测可能受系统超时影响。
@@ -268,7 +306,7 @@ The application UI is currently Chinese-first; this English section documents th
 | Relocation | Combines App Paths, uninstall records, and a bounded directory search into candidates with evidence; the user makes the choice |
 | Data directory checks | Analyzes explicit command-line switches; reports unavailable directories and conflicts between shortcuts for the same target; never changes arguments automatically |
 | Repair preview | Shows before/after values for target, working directory, and icon field by field |
-| Safe repair | Backs up the original `.lnk`, reads back and verifies after writing, and restores the backup when verification fails |
+| Safe repair | Backs up the original `.lnk`, reads back and verifies after writing, and restores on failure while the file still matches this operation's write |
 | Undo | Undo is grouped by batch; before restoring, it checks whether files changed again after repair and stops on conflict |
 | Audit | Repair and undo history is stored locally with snapshots, checksums, and per-item results |
 
@@ -293,8 +331,8 @@ LinkMend separates accurate diagnosis from safe writes:
 3. **No automatic candidate selection.** Several programs may share a filename. The UI shows paths, confidence, metadata, and matching evidence; the user makes the final choice.
 4. **Back up before modifying.** The original `.lnk` bytes and SHA-256 are stored in a local batch directory, and the history records before/after fields.
 5. **Refuse to overwrite changes made after the scan.** The current hash is recomputed before repair; a mismatch is skipped.
-6. **Read back and verify after writing.** If the target, working directory, or icon does not match the expected values, the original snapshot is restored automatically.
-7. **Undo never overwrites new changes.** Before each restore, the current hash is compared with the post-repair hash. Any conflict aborts the whole undo and lists the reason.
+6. **Read back and verify after writing.** If the target, working directory, or icon does not match the expected values, restore the snapshot only while the file still matches this operation's write. Changes or deletions made by another program are preserved.
+7. **Check the whole batch before undo.** Compare all remaining files with their post-repair hashes and validate the original snapshots. Preflight conflicts stop the batch. New conflicts or I/O failures during execution may cause partial completion; remaining items can be retried.
 8. **No automatic elevation.** The app runs with the current user's permissions. Permission failures are reported, and running elevated is the user's decision.
 
 ### Quick start
@@ -304,9 +342,23 @@ LinkMend separates accurate diagnosis from safe writes:
 - Windows 10 1809+ or Windows 11, x64
 - A self-contained release needs no preinstalled .NET runtime. Building from source requires the **.NET 10 SDK**.
 
+#### Download and run a portable build
+
+1. Sign in to GitHub and open [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml).
+2. Select a successful run for the `main` branch, marked with a green check. After a new push, wait for the build to finish.
+3. Download **LinkMend-win-x64** from the run's **Artifacts** section.
+4. Extract the downloaded artifact. It contains the versioned release package, such as `LinkMend-v0.1.1-win-x64.zip`; extract that package into a regular folder as well.
+5. Double-click **`LinkMend.exe`** in the extracted folder. This self-contained build needs neither a .NET installation nor an installer.
+
+If downloading is unavailable, check that you are signed in. If an artifact has expired, use a newer successful build or build from source below. See GitHub's [artifact download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts) for the browser steps.
+
+To update, close the old app, then extract and run the new package. Backups, history, and settings remain in `%LOCALAPPDATA%\LinkMend` regardless of the extraction folder; keep those files if you need to undo repairs.
+
 #### Build from source
 
 ```powershell
+git clone https://github.com/qinmuran0316/LinkMend.git
+cd LinkMend
 dotnet restore LinkMend.slnx
 dotnet build LinkMend.slnx -c Release
 dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj -c Release
@@ -322,22 +374,43 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 Output:
 
 ```text
-artifacts/release/LinkMend-v0.1.0-win-x64.zip
+artifacts/release/LinkMend-v0.1.1-win-x64.zip
 ```
 
 The package is a self-contained, single-file WPF application. Extract it and run `LinkMend.exe`. GitHub Actions also uploads a ZIP with the same name as a build artifact on every build.
 
-### Usage workflow
+### Usage
 
-1. Select Desktop or Start Menu, or add the folders you want to inspect. You can also drop `.lnk` files or folders onto the window.
-2. Click **开始检查 (Start Check)**. Scanning only reads shortcuts and never launches any program.
-3. Review the issue list on the left and the evidence, path comparison, and suggested action on the right.
-   - Check the items that can be fixed automatically, then click **预览并修复已选 (Preview and Repair Selected)**.
-   - For an item with a missing target, click **查找新位置 (Find New Location)** and confirm a candidate first.
-4. In the preview window, review every before/after value, then apply the repair.
-5. Open **修复历史 (Repair History)** to inspect backups or undo a whole batch.
+#### 1. Select a scope and scan
 
-> Relocation search only runs for a missing target. For offline disks or permission failures, restore access and rescan instead, so a recoverable configuration is not permanently changed.
+Open **诊断与修复 (Diagnostics and Repair)** and select **桌面 (Desktop)** or **开始菜单 (Start Menu)**. Use **+ 添加文件夹 (Add Folder)** for other locations. You can also drop `.lnk` files or folders containing shortcuts onto the window, then click **开始检查 (Start Check)**. Only selected scopes are scanned, and no target program is launched. Click **取消检查 (Cancel Check)** to cancel a scan.
+
+After scanning, select an issue on the left to read its original target, icon, working directory, and evidence on the right. Restore access to offline disks, networks, or inaccessible paths before rescanning. Data-directory conflicts are advisory; review the application's arguments yourself.
+
+#### 2. Fix an icon or working directory
+
+Check items with an available repair and click **预览并修复已选 (Preview and Repair Selected)**, or select one item and click **修复此项 (Repair This Item)**. Use **全选可处理 (Select All Actionable)** to select a batch and **清空选择 (Clear Selection)** to uncheck it. Missing targets require relocation confirmation first.
+
+#### 3. Locate a moved application
+
+1. Select an item whose target is missing, click **查找新位置 (Find New Location)**, and wait for the candidate list.
+2. Review the full path, product name, publisher, and matching evidence. If no match appears, click **添加目录 (Add Directory)**, choose the application's new installation folder, and wait for the search. Click **重新搜索 (Search Again)** to repeat it when needed.
+3. Select the correct candidate and click **使用选中位置 (Use Selected Location)**. This records your selection; it has not changed the shortcut yet.
+4. Click **修复此项 (Repair This Item)** or **预览并修复已选 (Preview and Repair Selected)** to open the preview.
+
+For example, if `D:\Apps\Example\Example.exe` moved to `E:\Software\Example\Example.exe`, add `E:\Software\Example` as a search folder, select that executable, and check the new target in the preview before applying. If the program was uninstalled and no candidate exists, reinstall it or recreate the shortcut manually.
+
+#### 4. Review and apply
+
+In **预览修复 (Repair Preview)**, review the before/after target, working directory, and icon values for each item. Click **应用修复 (Apply Repair)** to proceed, or **取消 (Cancel)** to dismiss the preview. LinkMend backs up the original `.lnk`, modifies it, and verifies the result. The result dialog lists successes, failures, and skipped items. A successful repair triggers a new scan.
+
+If the app reports that a file changed, scan again before choosing a repair. Closing the window is temporarily blocked while repair or undo writes are in progress; wait for the result.
+
+#### 5. Inspect history and undo
+
+Open **修复历史 (Repair History)**, select the repair batch, review its item results, click **撤销此批次 (Undo This Batch)**, and confirm. **打开备份目录 (Open Backup Folder)** opens the original snapshots. The default data folder is `%LOCALAPPDATA%\LinkMend`.
+
+If a file changed, was deleted, or has a damaged snapshot, preflight lists the conflicts and stops the whole batch. Resolve the reported problem while keeping any newer content you need. New conflicts or I/O failures during execution can leave a partial undo: select the original repair batch labeled **部分撤销 (Partially Undone)**, check its **待撤销 (Remaining)** count, resolve the failures, and click **撤销此批次 (Undo This Batch)** again to retry only the remaining items. Fully undone batches cannot be undone again.
 
 ### Diagnostic rules
 
@@ -423,6 +496,8 @@ Core services do not depend on WPF; Windows-specific implementations are separat
 
 See [docs/architecture.md](docs/architecture.md) for more design details.
 
+See [docs/review-0.1.1.md](docs/review-0.1.1.md) for the 0.1.1 findings, fixes, and validation results.
+
 ### Tests
 
 ```powershell
@@ -437,8 +512,9 @@ Current coverage includes:
 - candidate ranking, deduplication, cancellation, and disappearing files;
 - repair-plan generation;
 - backup, refusal after post-scan changes, and automatic rollback after verification failure;
-- successful undo, refusal after post-repair changes, and refusal of a second undo;
-- backup path-traversal protection and history JSON with a UTF-8 BOM;
+- successful undo, refusal after post-repair changes, retrying partial undo, and refusal of a second undo;
+- changes during reading, deleted/changed files before commit, and batch refusal on damaged snapshots;
+- backup path-traversal protection, special Windows filenames, malformed history, and history JSON with a UTF-8 BOM;
 - creating, reading, modifying, and clearing icons through real `IShellLink` / `WScript.Shell`.
 
 ### Data location
@@ -463,7 +539,7 @@ Default directory:
 - Windows icon caches are not cleared, so a white icon with valid paths is left as-is.
 - The search is not a full-disk scan. If the software is not found, add its directory and search again.
 - Programs with the same filename may share identical metadata; the user must confirm the match, and LinkMend cannot guarantee semantic identity.
-- Undo is batch-based. If any file in the batch changed after repair, the whole undo stops.
+- Undo checks all remaining files and snapshots before restoring. Preflight conflicts stop the batch; new conflicts or I/O failures during execution can cause partial completion, and remaining items can be retried.
 - Backups are not encrypted. Other processes that can read the current user's `%LOCALAPPDATA%` may be able to read these snapshots.
 - LinkMend loads and saves `.lnk` files through ShellLink. Whether unfamiliar Shell extension fields survive depends on the system implementation, which is why every write has a backup.
 - Scanning is read-only, but a single file probe may be delayed by system timeouts when a network path is unreachable.

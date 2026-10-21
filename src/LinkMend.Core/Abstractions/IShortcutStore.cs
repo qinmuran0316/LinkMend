@@ -28,7 +28,8 @@ public sealed record IconUpdate(string Path, int Index, bool Clear = false);
 public sealed record ShortcutPatch(
     string? TargetPath = null,
     string? WorkingDirectory = null,
-    IconUpdate? Icon = null)
+    IconUpdate? Icon = null,
+    string? ExpectedHash = null)
 {
     public bool HasChanges =>
         TargetPath is not null || WorkingDirectory is not null || Icon is not null;
@@ -53,8 +54,8 @@ public interface IShortcutStore
 
     /// <summary>
     /// Writes requested fields and leaves all other shortcut properties untouched.
-    /// Implementations should avoid replacing the original file until the new data
-    /// has been written and read back successfully.
+    /// Returns the hash of the bytes written. On failure the original must remain
+    /// untouched. Verify ExpectedHash before loading and immediately before replacing.
     /// </summary>
-    void Apply(string path, ShortcutPatch patch);
+    string Apply(string path, ShortcutPatch patch);
 }

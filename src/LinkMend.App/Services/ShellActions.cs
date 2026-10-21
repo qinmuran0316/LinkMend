@@ -6,7 +6,8 @@ public static class ShellActions
 {
     public static void OpenContainingFolder(string filePath)
     {
-        var startInfo = new ProcessStartInfo("explorer.exe")
+        var startInfo = new ProcessStartInfo(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"))
         {
             UseShellExecute = true
         };
@@ -16,7 +17,8 @@ public static class ShellActions
 
     public static void OpenFolder(string folderPath)
     {
-        var startInfo = new ProcessStartInfo("explorer.exe")
+        var startInfo = new ProcessStartInfo(Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"))
         {
             UseShellExecute = true
         };

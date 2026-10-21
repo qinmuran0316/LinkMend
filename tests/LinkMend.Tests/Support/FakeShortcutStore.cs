@@ -1,5 +1,6 @@
 using LinkMend.Core.Abstractions;
 using LinkMend.Core.Models;
+using LinkMend.Core.Paths;
 
 namespace LinkMend.Tests.Support;
 
@@ -13,15 +14,25 @@ internal sealed class FakeShortcutStore : IShortcutStore
 
     public string? ApplyFailure { get; set; }
 
+    public Action<string>? OnRead { get; set; }
+
+    public Action<string>? AfterApply { get; set; }
+
     public ShortcutReadResult Read(string path)
     {
+        OnRead?.Invoke(path);
         return Links.TryGetValue(path, out var link)
             ? ShortcutReadResult.Ok(link with { FilePath = path })
             : ShortcutReadResult.Fail(ShortcutReadFailureKind.NotFound, "测试：没有登记这个快捷方式");
     }
 
-    public void Apply(string path, ShortcutPatch patch)
+    public string Apply(string path, ShortcutPatch patch)
     {
+        if (patch.ExpectedHash is not null)
+        {
+            FileHash.EnsureMatches(path, patch.ExpectedHash);
+        }
+
         if (ApplyFailure is not null)
         {
             throw new ShortcutWriteException(ApplyFailure);
@@ -36,7 +47,7 @@ internal sealed class FakeShortcutStore : IShortcutStore
         if (CorruptFileAfterApply)
         {
             File.WriteAllText(path, $"corrupted-{Guid.NewGuid():N}");
-            return;
+            return FileHash.Compute(path);
         }
 
         var updated = link;
@@ -59,5 +70,8 @@ internal sealed class FakeShortcutStore : IShortcutStore
 
         Links[path] = updated;
         File.WriteAllText(path, $"updated-{Guid.NewGuid():N}");
+        var writtenHash = FileHash.Compute(path);
+        AfterApply?.Invoke(path);
+        return writtenHash;
     }
 }

@@ -10,8 +10,8 @@ public sealed record ScannedShortcut(
     DiagnosisResult Diagnosis)
 {
     public bool CanBuildAutomaticPlan =>
-        Diagnosis.HasAutoFix
-        || (Diagnosis.NeedsRelocation && !string.IsNullOrWhiteSpace(ContentHash));
+        !string.IsNullOrWhiteSpace(ContentHash)
+        && (Diagnosis.HasAutoFix || Diagnosis.NeedsRelocation);
 }
 
 public sealed record ScanRoot(string DirectoryPath, string Label);

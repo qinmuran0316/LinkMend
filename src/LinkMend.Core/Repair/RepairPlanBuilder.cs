@@ -26,12 +26,17 @@ public sealed class RepairPlanBuilder
         bool fixWorkingDirectory = true,
         bool fixIcon = true)
     {
-        if (string.IsNullOrWhiteSpace(item.ContentHash))
+        if (!item.CanBuildAutomaticPlan)
         {
             return null;
         }
 
         var needsRelocation = item.Diagnosis.NeedsRelocation;
+        if (candidate is not null && !needsRelocation)
+        {
+            return null;
+        }
+
         if (needsRelocation && candidate is null)
         {
             return null;

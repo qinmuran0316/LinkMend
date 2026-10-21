@@ -1,6 +1,11 @@
 using System.Runtime.InteropServices;
 using LinkMend.Core.Abstractions;
+using LinkMend.Core.Backup;
+using LinkMend.Core.Diagnosis;
+using LinkMend.Core.Models;
 using LinkMend.Core.Paths;
+using LinkMend.Core.Repair;
+using LinkMend.Core.Scan;
 using LinkMend.Windows;
 using LinkMend.Windows.Threading;
 using LinkMend.Tests.Support;
@@ -57,6 +62,66 @@ public sealed class WindowsShortcutStoreTests
         Assert.Equal("Demo description", result.Updated.Link.Description);
         Assert.True(PathResolver.AreSame(iconPath, result.Updated.Link.IconPath));
         Assert.Equal(1, result.Updated.Link.IconIndex);
+    }
+
+    [Fact]
+    public async Task RepairAndUndo_RealShortcut_RestoresOriginalBytesAndPreservesArguments()
+    {
+        using var temp = new TempDirectory();
+        var oldTarget = temp.Combine("OldApp/demo.exe");
+        var oldDirectory = temp.CreateDirectory("OldApp");
+        var newTarget = temp.CreateFile("NewApp/demo.exe");
+        var linkPath = temp.Combine("Demo.lnk");
+        await StaExecutor.RunAsync(() =>
+        {
+            var icon = $"{Path.Combine(Environment.SystemDirectory, "shell32.dll")},0";
+            CreateWithWScript(linkPath, oldTarget, "--profile \"C:\\A B\"", oldDirectory, icon);
+            var originalBytes = File.ReadAllBytes(linkPath);
+            var store = new WindowsShortcutStore();
+            var probe = new WindowsSystemProbe();
+            var scanner = new ShortcutScanner(store, new ShortcutDiagnoser(probe));
+            var scanned = Assert.Single(scanner.Scan(
+                new ScanRequest(Array.Empty<ScanRoot>(), new[] { linkPath }), null, CancellationToken.None).Shortcuts);
+            var candidate = new ResolutionCandidate(newTarget, 90, CandidateConfidence.High, Array.Empty<string>(), null);
+            var plan = new RepairPlanBuilder(probe).Build(scanned, candidate);
+            Assert.NotNull(plan);
+            var repository = new BackupRepository(temp.Combine("BackupRoot"));
+
+            var repaired = new RepairService(store, repository, probe).Apply(new[] { plan! });
+
+            Assert.Equal(1, repaired.RepairedCount);
+            var readBack = store.Read(linkPath);
+            Assert.True(PathResolver.AreSame(newTarget, readBack.Link!.TargetPath));
+            Assert.Equal("--profile \"C:\\A B\"", readBack.Link.Arguments);
+            var history = repository.LoadAll();
+            var undone = new UndoService(repository).Undo(Assert.Single(history), history);
+            Assert.Equal(OperationItemOutcome.Restored, Assert.Single(undone.Items).Outcome);
+            Assert.Equal(originalBytes, File.ReadAllBytes(linkPath));
+            return true;
+        });
+    }
+
+    [Fact]
+    public async Task Apply_WhenHashNoLongerMatches_PreservesChangedShortcut()
+    {
+        using var temp = new TempDirectory();
+        var target = temp.CreateFile("demo.exe");
+        var linkPath = temp.Combine("Demo.lnk");
+        await StaExecutor.RunAsync(() =>
+        {
+            var icon = $"{Path.Combine(Environment.SystemDirectory, "shell32.dll")},0";
+            CreateWithWScript(linkPath, target, "--old", temp.Path, icon);
+            var expectedHash = FileHash.Compute(linkPath);
+            CreateWithWScript(linkPath, target, "--new-user-arguments", temp.Path, icon);
+            var changedBytes = File.ReadAllBytes(linkPath);
+            var store = new WindowsShortcutStore();
+
+            Assert.Throws<FileChangedException>(() => store.Apply(linkPath,
+                new ShortcutPatch(WorkingDirectory: temp.Path, ExpectedHash: expectedHash)));
+            Assert.Equal(changedBytes, File.ReadAllBytes(linkPath));
+            Assert.Empty(Directory.EnumerateFiles(temp.Path, "*.tmp.lnk"));
+            return true;
+        });
     }
 
     [Fact]

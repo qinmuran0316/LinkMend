@@ -53,6 +53,24 @@ public sealed class BackupRepository
             throw new InvalidOperationException("备份批次至少需要一个文件。");
         }
 
+        if (operation is not (BackupOperations.Repair or BackupOperations.Undo)
+            || (operation == BackupOperations.Undo && !IsValidBatchId(undoesBatchId)))
+        {
+            throw new InvalidOperationException("无效的备份操作或撤销批次编号。");
+        }
+
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var seed in seedList)
+        {
+            if (!PathResolver.IsShortcutFilePath(seed.ShortcutPath)
+                || !string.Equals(seed.FileName, Path.GetFileName(seed.ShortcutPath), StringComparison.OrdinalIgnoreCase)
+                || !paths.Add(PathResolver.NormalizeKey(seed.ShortcutPath))
+                || !string.Equals(FileHash.Compute(seed.FileBytes), seed.OriginalHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"备份路径重复、无效或内容校验失败：{seed.ShortcutPath}。");
+            }
+        }
+
         var now = _timeProvider.GetLocalNow();
         var id = CreateBatchId(now);
         var snapshotDirectory = Path.Combine(SnapshotsDirectory, id);
@@ -70,15 +88,8 @@ public sealed class BackupRepository
         for (var index = 0; index < seedList.Length; index++)
         {
             var seed = seedList[index];
-            var hash = FileHash.Compute(seed.FileBytes);
-            if (!string.Equals(hash, seed.OriginalHash, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"备份内容校验失败：{seed.ShortcutPath}。原文件可能在读取后发生了变化。");
-            }
-
             var snapshotFile = $"item-{index + 1:D3}.bak";
-            File.WriteAllBytes(Path.Combine(snapshotDirectory, snapshotFile), seed.FileBytes);
+            AtomicFile.WriteAllBytes(Path.Combine(snapshotDirectory, snapshotFile), seed.FileBytes);
 
             batch.Items.Add(new BackupItem
             {
@@ -99,6 +110,11 @@ public sealed class BackupRepository
 
     public void Save(BackupBatch batch)
     {
+        if (!IsValidBatch(batch))
+        {
+            throw new InvalidOperationException("备份记录包含无效的字段、路径或校验值。");
+        }
+
         var path = GetHistoryPath(batch.Id);
         var json = JsonSerializer.SerializeToUtf8Bytes(batch, JsonOptions);
         AtomicFile.WriteAllBytes(path, json);
@@ -119,9 +135,10 @@ public sealed class BackupRepository
                 var batch = JsonSerializer.Deserialize<BackupBatch>(
                     ReadBytesWithoutBom(path),
                     JsonOptions);
-                if (batch is not null && !string.IsNullOrWhiteSpace(batch.Id))
+                if (IsValidBatch(batch)
+                    && string.Equals(batch!.Id, Path.GetFileNameWithoutExtension(path), StringComparison.Ordinal))
                 {
-                    results.Add(batch);
+                    results.Add(batch!);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -150,7 +167,8 @@ public sealed class BackupRepository
 
         try
         {
-            return JsonSerializer.Deserialize<BackupBatch>(ReadBytesWithoutBom(path), JsonOptions);
+            var batch = JsonSerializer.Deserialize<BackupBatch>(ReadBytesWithoutBom(path), JsonOptions);
+            return IsValidBatch(batch) && string.Equals(batch!.Id, id, StringComparison.Ordinal) ? batch : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -169,13 +187,24 @@ public sealed class BackupRepository
     public byte[] ReadSnapshot(BackupBatch batch, BackupItem item)
     {
         var path = GetSnapshotPath(batch, item);
-        return File.ReadAllBytes(path);
+        if ((File.GetAttributes(Path.GetDirectoryName(path)!) & FileAttributes.ReparsePoint) != 0
+            || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new IOException("备份快照不能是重解析点。");
+        }
+
+        var bytes = File.ReadAllBytes(path);
+        if (!string.Equals(FileHash.Compute(bytes), item.OriginalHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("备份快照校验失败，无法安全恢复。");
+        }
+
+        return bytes;
     }
 
     public string GetSnapshotPath(BackupBatch batch, BackupItem item)
     {
-        if (!IsValidBatchId(batch.Id) || string.IsNullOrWhiteSpace(item.SnapshotFile)
-            || !string.Equals(item.SnapshotFile, Path.GetFileName(item.SnapshotFile), StringComparison.Ordinal))
+        if (!IsValidBatchId(batch.Id) || !IsValidSnapshotFile(item.SnapshotFile))
         {
             throw new InvalidOperationException("备份记录包含无效的文件路径。");
         }
@@ -183,11 +212,69 @@ public sealed class BackupRepository
         return Path.Combine(SnapshotsDirectory, batch.Id, item.SnapshotFile);
     }
 
-    public bool HasUndoBatch(IReadOnlyList<BackupBatch> batches, string batchId) =>
-        batches.Any(batch =>
-            batch.Operation == BackupOperations.Undo
-            && string.Equals(batch.UndoesBatchId, batchId, StringComparison.Ordinal)
-            && batch.Items.Any(item => item.Status == BackupStatuses.Restored));
+    public IReadOnlyList<BackupItem> GetRemainingUndoItems(BackupBatch repairBatch, IReadOnlyList<BackupBatch> batches)
+    {
+        var restored = batches
+            .Where(batch => batch.Operation == BackupOperations.Undo
+                            && string.Equals(batch.UndoesBatchId, repairBatch.Id, StringComparison.Ordinal))
+            .SelectMany(batch => batch.Items)
+            .Where(item => item.Status == BackupStatuses.Restored)
+            .ToArray();
+
+        return repairBatch.Items
+            .Where(item => item.CanUndo && !restored.Any(undoItem =>
+                PathResolver.AreSame(undoItem.ShortcutPath, item.ShortcutPath)
+                && string.Equals(undoItem.OriginalHash, item.ResultHash, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(undoItem.ResultHash, item.OriginalHash, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+    }
+
+    public bool HasUndoBatch(IReadOnlyList<BackupBatch> batches, string batchId)
+    {
+        var repairBatch = batches.FirstOrDefault(batch =>
+            batch.Operation == BackupOperations.Repair && batch.Id == batchId);
+        return repairBatch is { HasRepairableSnapshot: true }
+               && GetRemainingUndoItems(repairBatch, batches).Count == 0;
+    }
+
+    public static bool IsValidBatch(BackupBatch? batch)
+    {
+        if (batch is null || !IsValidBatchId(batch.Id)
+            || batch.Operation is not (BackupOperations.Repair or BackupOperations.Undo)
+            || (batch.Operation == BackupOperations.Undo
+                && (!IsValidBatchId(batch.UndoesBatchId) || batch.UndoesBatchId == batch.Id))
+            || batch.Items is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        var snapshots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in batch.Items)
+        {
+            if (item is null || !PathResolver.IsShortcutFilePath(item.ShortcutPath)
+                || !string.Equals(item.FileName, Path.GetFileName(item.ShortcutPath), StringComparison.OrdinalIgnoreCase)
+                || !IsValidSnapshotFile(item.SnapshotFile)
+                || !FileHash.IsValid(item.OriginalHash)
+                || !paths.Add(PathResolver.NormalizeKey(item.ShortcutPath))
+                || !snapshots.Add(item.SnapshotFile)
+                || item.Status is not (BackupStatuses.Pending or BackupStatuses.Failed or BackupStatuses.Repaired or BackupStatuses.Restored)
+                || (item.Status == BackupStatuses.Repaired && batch.Operation != BackupOperations.Repair)
+                || (item.Status == BackupStatuses.Restored && batch.Operation != BackupOperations.Undo)
+                || (item.Status is BackupStatuses.Repaired or BackupStatuses.Restored && !FileHash.IsValid(item.ResultHash)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsValidSnapshotFile(string? name) =>
+        name is { Length: >= 12 }
+        && name.StartsWith("item-", StringComparison.Ordinal)
+        && name.EndsWith(".bak", StringComparison.Ordinal)
+        && name[5..^4].All(char.IsAsciiDigit);
 
     private string CreateBatchId(DateTimeOffset now)
     {
@@ -195,8 +282,8 @@ public sealed class BackupRepository
         {
             var id = string.Create(
                 CultureInfo.InvariantCulture,
-                $"{now:yyyyMMdd-HHmmss}-{Random.Shared.Next(0x1000, 0x10000):X4}");
-            if (!File.Exists(GetHistoryPath(id)))
+                $"{now:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..12]}");
+            if (!File.Exists(GetHistoryPath(id)) && !Directory.Exists(Path.Combine(SnapshotsDirectory, id)))
             {
                 return id;
             }

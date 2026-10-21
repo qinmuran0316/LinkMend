@@ -83,11 +83,13 @@ public sealed class WindowsShortcutStore : IShortcutStore
         }
     }
 
-    public void Apply(string path, ShortcutPatch patch)
+    public string Apply(string path, ShortcutPatch patch)
     {
+        var expectedHash = patch.ExpectedHash ?? FileHash.Compute(path);
+        FileHash.EnsureMatches(path, expectedHash);
         if (!patch.HasChanges)
         {
-            return;
+            return expectedHash;
         }
 
         if (!File.Exists(path))
@@ -133,7 +135,9 @@ public sealed class WindowsShortcutStore : IShortcutStore
             comObject = null;
 
             VerifyTemporaryLink(temporaryPath, patch);
-            ReplaceFile(temporaryPath, path);
+            var writtenHash = FileHash.Compute(temporaryPath);
+            AtomicFile.ReplaceExisting(temporaryPath, path, expectedHash);
+            return writtenHash;
         }
         catch (ShortcutWriteException)
         {
@@ -190,22 +194,6 @@ public sealed class WindowsShortcutStore : IShortcutStore
             {
                 throw new ShortcutWriteException("新快捷方式的图标位置与写入值不一致。");
             }
-        }
-    }
-
-    private static void ReplaceFile(string temporaryPath, string destinationPath)
-    {
-        try
-        {
-            File.Replace(
-                temporaryPath,
-                destinationPath,
-                destinationBackupFileName: null,
-                ignoreMetadataErrors: true);
-        }
-        catch (Exception ex) when (ex is IOException or PlatformNotSupportedException)
-        {
-            File.Move(temporaryPath, destinationPath, overwrite: true);
         }
     }
 

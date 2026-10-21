@@ -86,27 +86,62 @@ public sealed class BackupRepositoryTests
     }
 
     [Fact]
+    public void LoadAll_IgnoresNullItemsAndMismatchedRecordIds()
+    {
+        using var temp = new TempDirectory();
+        var repository = new BackupRepository(temp.Path);
+        File.WriteAllText(Path.Combine(repository.HistoryDirectory, "null-items.json"),
+            "{\"id\":\"null-items\",\"items\":null}");
+        File.WriteAllText(Path.Combine(repository.HistoryDirectory, "null-item.json"),
+            "{\"id\":\"null-item\",\"items\":[null]}");
+        File.WriteAllText(Path.Combine(repository.HistoryDirectory, "different-id.json"),
+            "{\"id\":\"other-id\",\"items\":[]}");
+
+        Assert.Empty(repository.LoadAll());
+        Assert.Null(repository.Load("null-items"));
+        Assert.Null(repository.Load("null-item"));
+        Assert.Null(repository.Load("different-id"));
+    }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData(".")]
+    [InlineData("item-001.bak:stream")]
+    [InlineData("item-001.bak ")]
+    public void GetSnapshotPath_RejectsSpecialWindowsNames(string name)
+    {
+        using var temp = new TempDirectory();
+        var repository = new BackupRepository(temp.Path);
+        var batch = new BackupBatch { Id = "20261022-120000-ABCD" };
+
+        Assert.Throws<InvalidOperationException>(() =>
+            repository.GetSnapshotPath(batch, new BackupItem { SnapshotFile = name }));
+    }
+
+    [Fact]
     public void HasUndoBatch_OnlyCountsBatchesThatActuallyRestoredSomething()
     {
         using var temp = new TempDirectory();
         var repository = new BackupRepository(temp.Path);
-        var failedUndo = new BackupBatch
-        {
-            Id = "20261022-120000-AAAA",
-            Operation = BackupOperations.Undo,
-            UndoesBatchId = "20261022-110000-BBBB",
-            Items = new List<BackupItem>
-            {
-                new() { ShortcutPath = @"C:\Links\Demo.lnk", Status = BackupStatuses.Failed }
-            }
-        };
+        var bytes = Encoding.UTF8.GetBytes("original");
+        var repaired = Encoding.UTF8.GetBytes("repaired");
+        var seed = new BackupSeed(@"C:\Links\Demo.lnk", "Demo.lnk", bytes, FileHash.Compute(bytes), "", "", "");
+        var repair = repository.CreateBatch(BackupOperations.Repair, new[] { seed });
+        repair.Items[0].Status = BackupStatuses.Repaired;
+        repair.Items[0].ResultHash = FileHash.Compute(repaired);
+        repository.Save(repair);
+        var failedUndo = repository.CreateBatch(BackupOperations.Undo,
+            new[] { seed with { FileBytes = repaired, OriginalHash = FileHash.Compute(repaired) } },
+            undoesBatchId: repair.Id);
+        failedUndo.Items[0].Status = BackupStatuses.Failed;
         repository.Save(failedUndo);
 
-        Assert.False(repository.HasUndoBatch(repository.LoadAll(), "20261022-110000-BBBB"));
+        Assert.False(repository.HasUndoBatch(repository.LoadAll(), repair.Id));
 
         failedUndo.Items[0].Status = BackupStatuses.Restored;
+        failedUndo.Items[0].ResultHash = repair.Items[0].OriginalHash;
         repository.Save(failedUndo);
 
-        Assert.True(repository.HasUndoBatch(repository.LoadAll(), "20261022-110000-BBBB"));
+        Assert.True(repository.HasUndoBatch(repository.LoadAll(), repair.Id));
     }
 }
