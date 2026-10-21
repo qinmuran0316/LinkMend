@@ -8,6 +8,8 @@ Chinese-first and local-first. Explain before changing, back up before writing, 
 
 ![CI](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml/badge.svg)
 
+[下载 Windows 安装版](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64-Setup.exe) · [下载免安装版](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64.zip) · [全部版本 / Releases](https://github.com/qinmuran0316/LinkMend/releases)
+
 [简体中文](#简体中文) · [English](#english)
 
 ---
@@ -69,17 +71,16 @@ LinkMend 把“准确判断”和“安全写入”拆成独立步骤：
 
 #### 下载并安装（推荐）
 
-1. 登录 GitHub，打开 [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml)。
-2. 选择 `main` 分支上带绿色勾的成功运行记录；如果刚推送代码，请等待构建完成。
-3. 在该次运行页面的 **Artifacts** 区域下载 **LinkMend-win-x64**。
-4. 解压下载的构建产物，运行 **`LinkMend-v0.1.1-win-x64-Setup.exe`**。
-5. 按安装向导选择目录、开始菜单文件夹，以及是否创建桌面快捷方式；完成后启动 **LinkMend**。
+1. 打开 [Releases 发布页](https://github.com/qinmuran0316/LinkMend/releases/latest)。
+2. 展开 **Assets**，下载 **`LinkMend-v0.1.1-win-x64-Setup.exe`**，也可[直接下载安装包](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64-Setup.exe)。公开发布包无需登录 GitHub 即可下载。
+3. 双击下载的安装程序。
+4. 按安装向导选择目录、开始菜单文件夹，以及是否创建桌面快捷方式；完成后启动 **LinkMend**。
 
 安装包支持简体中文和英文向导，默认安装到当前用户的 `%LOCALAPPDATA%\Programs\LinkMend`，无需管理员权限，也不需要预装 .NET。可从开始菜单或桌面快捷方式启动。
 
-需要免安装版时，解压同一构建产物内的 **`LinkMend-v0.1.1-win-x64.zip`**，再运行其中的 **`LinkMend.exe`**。
+需要免安装版时，下载 [**`LinkMend-v0.1.1-win-x64.zip`**](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64.zip)，解压后运行其中的 **`LinkMend.exe`**。`Source code` 是源码，直接运行请使用上述安装 EXE 或免安装 ZIP。
 
-若下载按钮不可用，请确认已登录；若产物已过期，可使用较新的成功构建，或按下方步骤从源码生成。GitHub 的操作说明见 [下载工作流产物](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)。
+开发构建仍可在 [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml) 的成功运行中下载 **Artifacts → LinkMend-win-x64**，其中包含安装 EXE、免安装 ZIP 及校验文件；这种下载方式需要登录 GitHub。正式版本请优先使用 Releases。
 
 安装版更新时先关闭 LinkMend，再运行新版 `Setup.exe`，沿用原安装目录。卸载可在 **Windows 设置 → 应用** 中选择 **LinkMend**，或使用开始菜单中的卸载入口。程序运行期间，安装程序会阻止升级和卸载，避免中断文件写入。
 
@@ -377,17 +378,16 @@ LinkMend separates accurate diagnosis from safe writes:
 
 #### Download and install (recommended)
 
-1. Sign in to GitHub and open [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml).
-2. Select a successful run for the `main` branch, marked with a green check. After a new push, wait for the build to finish.
-3. Download **LinkMend-win-x64** from the run's **Artifacts** section.
-4. Extract the downloaded artifact and run **`LinkMend-v0.1.1-win-x64-Setup.exe`**.
-5. Choose the installation directory, Start Menu folder, and optional desktop shortcut in the wizard, then launch **LinkMend**.
+1. Open the [latest release](https://github.com/qinmuran0316/LinkMend/releases/latest).
+2. Expand **Assets** and download **`LinkMend-v0.1.1-win-x64-Setup.exe`**, or use the [direct installer download](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64-Setup.exe). Public release downloads require no GitHub sign-in.
+3. Double-click the downloaded installer.
+4. Choose the installation directory, Start Menu folder, and optional desktop shortcut in the wizard, then launch **LinkMend**.
 
 The wizard supports Simplified Chinese and English. It defaults to `%LOCALAPPDATA%\Programs\LinkMend` for the current user, requires no administrator rights, and includes the .NET runtime. Launch it from the Start Menu or desktop shortcut.
 
-For a portable build, extract **`LinkMend-v0.1.1-win-x64.zip`** from the same artifact and run **`LinkMend.exe`** inside it.
+For a portable build, download [**`LinkMend-v0.1.1-win-x64.zip`**](https://github.com/qinmuran0316/LinkMend/releases/download/v0.1.1/LinkMend-v0.1.1-win-x64.zip), extract it, and run **`LinkMend.exe`** inside. The `Source code` archives contain source files; use the setup EXE or portable ZIP to run the app.
 
-If downloading is unavailable, check that you are signed in. If an artifact has expired, use a newer successful build or build from source below. See GitHub's [artifact download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts) for the browser steps.
+Development builds remain available under **Artifacts → LinkMend-win-x64** in successful [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml) runs, containing the setup EXE, portable ZIP, and checksums. Artifact downloads require GitHub sign-in; prefer Releases for published versions.
 
 To update an installed copy, close LinkMend and run the new `Setup.exe`, keeping the existing installation directory. Uninstall it through **Windows Settings → Apps** or its Start Menu uninstall entry. Setup blocks upgrades and uninstallation while LinkMend is running to avoid interrupting file writes.
 
