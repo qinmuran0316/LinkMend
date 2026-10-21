@@ -5,11 +5,30 @@ param(
 $ErrorActionPreference = "Stop"
 Add-Type -TypeDefinition @'
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 namespace LinkMend.InstallerSmoke {
     public static class NativeMethods {
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern uint GetLongPathName(string path, StringBuilder output, uint capacity);
+
+        [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IShellLinkW {
+            void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int capacity,
+                System.IntPtr findData, uint flags);
+        }
+
+        public static string ReadShortcutTarget(string path) {
+            object link = System.Activator.CreateInstance(System.Type.GetTypeFromCLSID(
+                new System.Guid("00021401-0000-0000-C000-000000000046")));
+            try {
+                ((IPersistFile)link).Load(path, 0);
+                var output = new StringBuilder(32768);
+                ((IShellLinkW)link).GetPath(output, output.Capacity, System.IntPtr.Zero, 4);
+                return output.ToString();
+            }
+            finally { Marshal.FinalReleaseComObject(link); }
+        }
     }
 }
 '@
@@ -44,7 +63,6 @@ $installedExe = Join-Path $installDir "LinkMend.exe"
 $uninstaller = Join-Path $installDir "unins000.exe"
 $expectedExeHash = (Get-FileHash -LiteralPath (Join-Path $repoRoot "artifacts\publish\LinkMend-win-x64\LinkMend.exe") -Algorithm SHA256).Hash
 $appProcess = $null
-$shell = $null
 
 function Invoke-SetupProcess {
     param([string]$Path, [string[]]$SetupArguments)
@@ -89,23 +107,19 @@ function Get-LongFilePath {
 function Assert-ShortcutTarget {
     param([string]$ShortcutPath)
 
-    $shortcut = $shell.CreateShortcut($ShortcutPath)
-    try {
-        # WScript.Shell can return an equivalent 8.3 path on some Windows locales.
-        $actualTarget = Get-LongFilePath $shortcut.TargetPath
-        $expectedTarget = Get-LongFilePath $installedExe
-        if ($actualTarget -ne $expectedTarget) {
-            throw "Shortcut '$ShortcutPath' targets '$($shortcut.TargetPath)' instead of '$installedExe'."
-        }
-        if ((Get-FileHash -LiteralPath $actualTarget -Algorithm SHA256).Hash -ne $expectedExeHash) {
-            throw "Shortcut target does not match the published executable."
-        }
+    # WScript.Shell can lose non-ANSI characters on English Windows; read IShellLinkW directly.
+    $target = [LinkMend.InstallerSmoke.NativeMethods]::ReadShortcutTarget($ShortcutPath)
+    $actualTarget = Get-LongFilePath $target
+    $expectedTarget = Get-LongFilePath $installedExe
+    if ($actualTarget -ne $expectedTarget) {
+        throw "Shortcut '$ShortcutPath' targets '$target' instead of '$installedExe'."
     }
-    finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) | Out-Null }
+    if ((Get-FileHash -LiteralPath $actualTarget -Algorithm SHA256).Hash -ne $expectedExeHash) {
+        throw "Shortcut target does not match the published executable."
+    }
 }
 
 try {
-    $shell = New-Object -ComObject WScript.Shell
     $commonArguments = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
         ('/DIR="{0}"' -f $installDir), ('/GROUP="{0}"' -f $group), $taskArgument)
     $installExit = Invoke-SetupProcess $InstallerPath ($commonArguments + ('/LOG="{0}"' -f (Join-Path $testRoot "install.log")))
@@ -187,6 +201,5 @@ finally {
     if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
         $null = Invoke-SetupProcess $uninstaller @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
     }
-    if ($null -ne $shell) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) | Out-Null }
     if (Test-Path -LiteralPath $sentinel) { Remove-Item -LiteralPath $sentinel -Force }
 }
