@@ -1,0 +1,137 @@
+<Window x:Class="LinkMend.App.Dialogs.RepairPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="预览修复"
+        Width="820"
+        Height="700"
+        MinWidth="700"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{StaticResource PageBackground}"
+        FontFamily="{StaticResource AppFont}"
+        TextOptions.TextFormattingMode="Display">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="预览修复" Style="{StaticResource PageTitleStyle}" FontSize="23" />
+            <TextBlock x:Name="SummaryText"
+                       Style="{StaticResource BodyTextStyle}"
+                       Margin="0,5,0,0" />
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Background="{StaticResource AccentSoft}"
+                CornerRadius="10"
+                Padding="13,10"
+                Margin="0,14,0,0">
+            <StackPanel>
+                <TextBlock Text="写入前会备份原始快捷方式，写入后会重新读取验证。"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource Accent}" />
+                <TextBlock Text="修复完成后可在“修复历史”中撤销；如果文件在修复后又被其他程序修改，撤销会停止并保留新变化。"
+                           Style="{StaticResource CaptionTextStyle}"
+                           Margin="0,3,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource CardStyle}"
+                Padding="14,12"
+                Margin="0,14,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="PlansList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceAltBackground}"
+                                    CornerRadius="10"
+                                    Padding="13,11"
+                                    Margin="0,0,0,9">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               FontSize="13.5"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimary}" />
+                                    <TextBlock Text="{Binding FilePath}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               Margin="0,3,0,0" />
+
+                                    <ItemsControl ItemsSource="{Binding Changes}" Margin="0,8,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="65" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="25" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Label}"
+                                                               FontSize="10.5"
+                                                               Foreground="{StaticResource TextMuted}"
+                                                               VerticalAlignment="Center" />
+                                                    <Border Grid.Column="1"
+                                                            Background="{StaticResource SurfaceBackground}"
+                                                            BorderBrush="{StaticResource BorderSoft}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6"
+                                                            Padding="7,5">
+                                                        <TextBlock Text="{Binding Before}"
+                                                                   FontSize="10.5"
+                                                                   Foreground="{StaticResource TextSecondary}"
+                                                                   TextWrapping="Wrap" />
+                                                    </Border>
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="→"
+                                                               FontSize="13"
+                                                               Foreground="{StaticResource TextMuted}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                    <Border Grid.Column="3"
+                                                            Background="{StaticResource GreenSoft}"
+                                                            CornerRadius="6"
+                                                            Padding="7,5">
+                                                        <TextBlock Text="{Binding After}"
+                                                                   FontSize="10.5"
+                                                                   Foreground="{StaticResource Green}"
+                                                                   TextWrapping="Wrap" />
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <TextBlock Text="只修改上方列出的字段，其他快捷方式属性保持不变。"
+                       Style="{StaticResource CaptionTextStyle}"
+                       VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="取消"
+                        IsCancel="True"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        MinWidth="86" />
+                <Button Content="应用修复"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        AutomationProperties.AutomationId="ApplyRepairButton"
+                        IsDefault="True"
+                        Click="Confirm_Click"
+                        Margin="8,0,0,0"
+                        MinWidth="110" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

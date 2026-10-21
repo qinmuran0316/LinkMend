@@ -1,0 +1,229 @@
+<Window x:Class="LinkMend.App.Dialogs.RelocationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="查找软件新位置"
+        Width="940"
+        Height="700"
+        MinWidth="790"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{StaticResource PageBackground}"
+        FontFamily="{StaticResource AppFont}"
+        TextOptions.TextFormattingMode="Display">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock x:Name="HeaderTitle"
+                       Text="查找新位置"
+                       Style="{StaticResource PageTitleStyle}"
+                       FontSize="23" />
+            <TextBlock x:Name="OriginalTargetText"
+                       Style="{StaticResource BodyTextStyle}"
+                       Margin="0,5,0,0" />
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Style="{StaticResource CardStyle}"
+                Padding="16,13"
+                Margin="0,14,0,0">
+            <StackPanel>
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="搜索目录" Style="{StaticResource SectionTitleStyle}" />
+                        <TextBlock Text="同时检查安装记录和常见安装目录"
+                                   Style="{StaticResource CaptionTextStyle}"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="AddRootButton"
+                                Content="添加目录"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                AutomationProperties.AutomationId="AddSearchRootButton"
+                                Click="AddRoot_Click" />
+                        <Button x:Name="SearchButton"
+                                Content="重新搜索"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                AutomationProperties.AutomationId="SearchAgainButton"
+                                Click="SearchAgain_Click"
+                                Margin="8,0,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <ItemsControl x:Name="RootsList" Margin="0,9,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceAltBackground}"
+                                    BorderBrush="{StaticResource BorderSoft}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,3"
+                                    Margin="0,0,6,4">
+                                <TextBlock Text="{Binding}"
+                                           FontSize="10.5"
+                                           Foreground="{StaticResource TextSecondary}"
+                                           MaxWidth="360"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <ProgressBar x:Name="SearchProgress"
+                                 Width="110"
+                                 Height="4"
+                                 IsIndeterminate="True"
+                                 Style="{StaticResource FluentProgressBar}"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,9,0" />
+                    <TextBlock x:Name="SearchStatus"
+                               Text="准备搜索…"
+                               Style="{StaticResource CaptionTextStyle}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2"
+                Style="{StaticResource CardStyle}"
+                Padding="14,12"
+                Margin="0,14,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <TextBlock Text="候选程序" Style="{StaticResource SectionTitleStyle}" />
+                    <TextBlock x:Name="CandidateCountText"
+                               Text="0 个候选"
+                               Style="{StaticResource CaptionTextStyle}"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center" />
+                </Grid>
+
+                <ListBox x:Name="CandidatesList"
+                         Grid.Row="1"
+                         Margin="0,9,0,0"
+                         Style="{StaticResource ResultListStyle}"
+                         AutomationProperties.AutomationId="CandidatesList"
+                         SelectionChanged="CandidatesList_SelectionChanged"
+                         MouseDoubleClick="CandidatesList_MouseDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid>
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Text="{Binding Path}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimary}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,90,0" />
+                                        <Border Background="{StaticResource AccentSoft}"
+                                                Style="{StaticResource BadgeBorderStyle}"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top">
+                                            <TextBlock Text="{Binding ConfidenceLabel}"
+                                                       FontSize="10.5"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Accent}" />
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="{Binding MetadataLine}"
+                                               Style="{StaticResource CaptionTextStyle}"
+                                               Margin="0,4,0,0" />
+                                    <ItemsControl ItemsSource="{Binding Reasons}" Margin="0,6,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="11" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="•"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource TextMuted}" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding}"
+                                                               FontSize="10.5"
+                                                               Foreground="{StaticResource TextSecondary}"
+                                                               TextWrapping="Wrap" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel x:Name="EmptyPanel"
+                            Grid.Row="1"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Visibility="Collapsed">
+                    <Border Width="48"
+                            Height="48"
+                            CornerRadius="15"
+                            Background="{StaticResource AccentSoft}"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="⌕"
+                                   FontSize="24"
+                                   Foreground="{StaticResource Accent}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="EmptyTitle"
+                               Text="没有找到同名程序"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}"
+                               HorizontalAlignment="Center"
+                               Margin="0,10,0,0" />
+                    <TextBlock x:Name="EmptyMessage"
+                               Style="{StaticResource CaptionTextStyle}"
+                               TextAlignment="Center"
+                               MaxWidth="500"
+                               HorizontalAlignment="Center"
+                               Margin="0,5,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <TextBlock Text="LinkMend 不会自动选择。请核对路径、发布者和目录后再使用。"
+                       Style="{StaticResource CaptionTextStyle}"
+                       VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="取消"
+                        IsCancel="True"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        MinWidth="86" />
+                <Button x:Name="UseCandidateButton"
+                        Content="使用选中位置"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        AutomationProperties.AutomationId="UseCandidateButton"
+                        IsEnabled="False"
+                        Click="UseCandidate_Click"
+                        Margin="8,0,0,0"
+                        MinWidth="120" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

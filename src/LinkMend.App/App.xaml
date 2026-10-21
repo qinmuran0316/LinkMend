@@ -1,0 +1,23 @@
+<Application x:Class="LinkMend.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:con="clr-namespace:LinkMend.App.Converters"
+             ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+            <con:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+            <con:InverseBooleanConverter x:Key="InverseBool" />
+            <con:NullToVisibilityConverter x:Key="NullToVisibility" />
+            <con:NullToVisibilityConverter x:Key="NotNullToVisibility" Invert="True" />
+            <con:HealthToBrushConverter x:Key="HealthBrush" />
+            <con:HealthToBackgroundConverter x:Key="HealthBackground" />
+            <con:HealthToLabelConverter x:Key="HealthLabel" />
+            <con:SeverityToBrushConverter x:Key="SeverityBrush" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
