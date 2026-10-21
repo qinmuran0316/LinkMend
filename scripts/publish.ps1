@@ -54,4 +54,8 @@ if (Test-Path -LiteralPath $zipPath) {
 }
 
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+$hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText($zipPath + ".sha256",
+    $hash + "  " + [IO.Path]::GetFileName($zipPath) + [Environment]::NewLine,
+    [Text.Encoding]::ASCII)
 Write-Host "Created $zipPath"

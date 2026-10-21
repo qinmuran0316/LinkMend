@@ -31,9 +31,28 @@ jobs:
       - name: Publish self-contained package
         run: powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/publish.ps1 -Configuration Release
 
+      - name: Build Windows installer
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-installer.ps1 -SkipPublish
+
+      - name: Test install, upgrade, and uninstall
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/test-installer.ps1
+
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: LinkMend-win-x64
-          path: artifacts/release/*.zip
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/*-Setup.exe
+            artifacts/release/*.sha256
           if-no-files-found: error
+
+      - name: Upload installer validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkMend-installer-validation
+          path: |
+            artifacts/test-results/installer-smoke-*.json
+            artifacts/installer-smoke/**/*.log
+          if-no-files-found: ignore

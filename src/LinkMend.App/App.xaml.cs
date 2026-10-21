@@ -14,6 +14,8 @@ namespace LinkMend.App;
 
 public partial class App : Application
 {
+    private Mutex? _runningMarker;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -36,6 +38,9 @@ public partial class App : Application
 
         try
         {
+            // The installer checks for this object before upgrading or uninstalling.
+            // No ownership is taken, so multiple application windows remain supported.
+            _runningMarker = new Mutex(false, @"Local\LinkMend.Running");
             var probe = new WindowsSystemProbe();
             var store = new WindowsShortcutStore();
             var diagnoser = new ShortcutDiagnoser(probe);
@@ -74,6 +79,12 @@ public partial class App : Application
                 MessageBoxImage.Error);
             Shutdown(1);
         }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _runningMarker?.Dispose();
+        base.OnExit(e);
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

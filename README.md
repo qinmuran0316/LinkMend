@@ -67,17 +67,23 @@ LinkMend 把“准确判断”和“安全写入”拆成独立步骤：
 - Windows 10 1809+ 或 Windows 11，x64
 - 运行时采用自包含发布时，用户不需要预装 .NET；从源码构建需要 **.NET 10 SDK**
 
-#### 下载并运行（免安装）
+#### 下载并安装（推荐）
 
 1. 登录 GitHub，打开 [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml)。
 2. 选择 `main` 分支上带绿色勾的成功运行记录；如果刚推送代码，请等待构建完成。
 3. 在该次运行页面的 **Artifacts** 区域下载 **LinkMend-win-x64**。
-4. 解压下载的构建产物；其中包含版本发布包，例如 `LinkMend-v0.1.1-win-x64.zip`，再将它解压到普通文件夹。
-5. 双击解压目录中的 **`LinkMend.exe`**。这是自包含版本，无需安装 .NET，也无需先安装本工具。
+4. 解压下载的构建产物，运行 **`LinkMend-v0.1.1-win-x64-Setup.exe`**。
+5. 按安装向导选择目录、开始菜单文件夹，以及是否创建桌面快捷方式；完成后启动 **LinkMend**。
+
+安装包支持简体中文和英文向导，默认安装到当前用户的 `%LOCALAPPDATA%\Programs\LinkMend`，无需管理员权限，也不需要预装 .NET。可从开始菜单或桌面快捷方式启动。
+
+需要免安装版时，解压同一构建产物内的 **`LinkMend-v0.1.1-win-x64.zip`**，再运行其中的 **`LinkMend.exe`**。
 
 若下载按钮不可用，请确认已登录；若产物已过期，可使用较新的成功构建，或按下方步骤从源码生成。GitHub 的操作说明见 [下载工作流产物](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts)。
 
-更新版本时先关闭旧程序，再解压并运行新包。备份、历史和设置位于 `%LOCALAPPDATA%\LinkMend`，不随程序解压目录变化；需要撤销时请保留这些数据。
+安装版更新时先关闭 LinkMend，再运行新版 `Setup.exe`，沿用原安装目录。卸载可在 **Windows 设置 → 应用** 中选择 **LinkMend**，或使用开始菜单中的卸载入口。程序运行期间，安装程序会阻止升级和卸载，避免中断文件写入。
+
+备份、历史和设置位于 `%LOCALAPPDATA%\LinkMend`，升级与卸载会保留这些数据；重装后可继续查看历史。免安装版更新时关闭旧程序，再解压并运行新包即可。
 
 #### 从源码构建
 
@@ -90,7 +96,22 @@ dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj -c Release
 dotnet run --project src/LinkMend.App/LinkMend.App.csproj -c Debug
 ```
 
-#### 生成免安装发布包
+#### 生成安装包
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1
+```
+
+脚本先发布 x64 自包含应用，再生成安装程序与免安装 ZIP：
+
+```text
+artifacts/release/LinkMend-v0.1.1-win-x64-Setup.exe
+artifacts/release/LinkMend-v0.1.1-win-x64.zip
+```
+
+两种文件均附带 `.sha256` 校验文件。首次构建会下载固定版本的官方 Inno Setup 6.7.3 编译器及简体中文语言文件并校验 SHA-256；编译器以便携模式放在 `artifacts/tools/`，不注册到系统安装列表。已发布应用时可添加 `-SkipPublish` 只重新制作安装包。
+
+#### 只生成免安装发布包
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
@@ -102,7 +123,7 @@ powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
 artifacts/release/LinkMend-v0.1.1-win-x64.zip
 ```
 
-发布包为自包含单文件 WPF 应用，解压后运行 `LinkMend.exe` 即可。GitHub Actions 也会在每次构建时上传同名 ZIP 作为构建产物。
+发布包为自包含单文件 WPF 应用，解压后运行 `LinkMend.exe` 即可。GitHub Actions 会构建并验证安装版，然后将安装 EXE、免安装 ZIP 及校验文件上传到 **LinkMend-win-x64**。
 
 ### 使用方法
 
@@ -212,8 +233,12 @@ tests/
   LinkMend.Tests/     单元测试 + ShellLink COM 真实读写测试
 docs/
   architecture.md     分层、流程、数据格式与安全不变量
+installer/
+  LinkMend.iss         当前用户安装、快捷方式、升级与卸载
 scripts/
   publish.ps1         自包含发布与 ZIP 打包
+  build-installer.ps1  下载校验编译器并生成安装包
+  test-installer.ps1   安装、启动、升级与卸载验证
   Create-Icon.ps1     生成应用图标
 ```
 
@@ -241,6 +266,14 @@ dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj --nologo
 - 读取期间变化、提交前删除/修改、快照损坏时整批停止；
 - 备份路径穿越防护、特殊 Windows 文件名、异常历史结构和带 BOM 的历史文件；
 - 通过真实 `IShellLink` / `WScript.Shell` 创建、读取、修改和清除图标。
+
+安装包另有真实流程检查：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer.ps1
+```
+
+请在尚未安装 LinkMend 的测试用户下运行。脚本使用独立测试安装目录，验证中文与空格路径、快捷方式、启动退出、运行中阻止升级/卸载、覆盖安装、卸载清理及数据保留；结束后卸载测试副本。CI 自动执行该检查并上传验证记录。
 
 ### 数据位置
 
@@ -342,17 +375,23 @@ LinkMend separates accurate diagnosis from safe writes:
 - Windows 10 1809+ or Windows 11, x64
 - A self-contained release needs no preinstalled .NET runtime. Building from source requires the **.NET 10 SDK**.
 
-#### Download and run a portable build
+#### Download and install (recommended)
 
 1. Sign in to GitHub and open [Actions → ci](https://github.com/qinmuran0316/LinkMend/actions/workflows/ci.yml).
 2. Select a successful run for the `main` branch, marked with a green check. After a new push, wait for the build to finish.
 3. Download **LinkMend-win-x64** from the run's **Artifacts** section.
-4. Extract the downloaded artifact. It contains the versioned release package, such as `LinkMend-v0.1.1-win-x64.zip`; extract that package into a regular folder as well.
-5. Double-click **`LinkMend.exe`** in the extracted folder. This self-contained build needs neither a .NET installation nor an installer.
+4. Extract the downloaded artifact and run **`LinkMend-v0.1.1-win-x64-Setup.exe`**.
+5. Choose the installation directory, Start Menu folder, and optional desktop shortcut in the wizard, then launch **LinkMend**.
+
+The wizard supports Simplified Chinese and English. It defaults to `%LOCALAPPDATA%\Programs\LinkMend` for the current user, requires no administrator rights, and includes the .NET runtime. Launch it from the Start Menu or desktop shortcut.
+
+For a portable build, extract **`LinkMend-v0.1.1-win-x64.zip`** from the same artifact and run **`LinkMend.exe`** inside it.
 
 If downloading is unavailable, check that you are signed in. If an artifact has expired, use a newer successful build or build from source below. See GitHub's [artifact download instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts) for the browser steps.
 
-To update, close the old app, then extract and run the new package. Backups, history, and settings remain in `%LOCALAPPDATA%\LinkMend` regardless of the extraction folder; keep those files if you need to undo repairs.
+To update an installed copy, close LinkMend and run the new `Setup.exe`, keeping the existing installation directory. Uninstall it through **Windows Settings → Apps** or its Start Menu uninstall entry. Setup blocks upgrades and uninstallation while LinkMend is running to avoid interrupting file writes.
+
+Upgrades and uninstallation preserve backups, history, and settings in `%LOCALAPPDATA%\LinkMend`; reinstalling retains access to that history. For portable updates, close the old app, then extract and run the new package.
 
 #### Build from source
 
@@ -365,7 +404,22 @@ dotnet test tests/LinkMend.Tests/LinkMend.Tests.csproj -c Release
 dotnet run --project src/LinkMend.App/LinkMend.App.csproj -c Debug
 ```
 
-#### Build a portable release
+#### Build the installer
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1
+```
+
+The script publishes the x64 self-contained application and creates both formats:
+
+```text
+artifacts/release/LinkMend-v0.1.1-win-x64-Setup.exe
+artifacts/release/LinkMend-v0.1.1-win-x64.zip
+```
+
+Both files have accompanying `.sha256` checksums. The first build downloads the pinned official Inno Setup 6.7.3 compiler and Simplified Chinese language file, verifying their SHA-256 hashes. The compiler runs in portable mode under `artifacts/tools/` without uninstall registration. Add `-SkipPublish` to rebuild only the installer from an already published application.
+
+#### Build only the portable release
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/publish.ps1
@@ -377,7 +431,7 @@ Output:
 artifacts/release/LinkMend-v0.1.1-win-x64.zip
 ```
 
-The package is a self-contained, single-file WPF application. Extract it and run `LinkMend.exe`. GitHub Actions also uploads a ZIP with the same name as a build artifact on every build.
+The package is a self-contained, single-file WPF application. Extract it and run `LinkMend.exe`. GitHub Actions builds and validates the installer, then uploads the setup EXE, portable ZIP, and checksums under **LinkMend-win-x64**.
 
 ### Usage
 
@@ -487,8 +541,12 @@ tests/
   LinkMend.Tests/     unit tests + real ShellLink COM read/write tests
 docs/
   architecture.md     layering, flows, data formats, safety invariants
+installer/
+  LinkMend.iss         current-user installation, shortcuts, upgrades, and uninstall
 scripts/
   publish.ps1         self-contained publishing and ZIP packaging
+  build-installer.ps1  verified compiler download and installer creation
+  test-installer.ps1   install, launch, upgrade, and uninstall verification
   Create-Icon.ps1     application icon generation
 ```
 
@@ -516,6 +574,14 @@ Current coverage includes:
 - changes during reading, deleted/changed files before commit, and batch refusal on damaged snapshots;
 - backup path-traversal protection, special Windows filenames, malformed history, and history JSON with a UTF-8 BOM;
 - creating, reading, modifying, and clearing icons through real `IShellLink` / `WScript.Shell`.
+
+The installer also has an end-to-end smoke check:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-installer.ps1
+```
+
+Run it under a test user with no installed LinkMend. It uses a separate installation directory to check non-ASCII and space-containing paths, shortcuts, application startup and exit, blocked upgrades/uninstall while running, reinstallation, uninstall cleanup, and preservation of application data. It uninstalls its test copy afterward. CI runs this check and uploads its validation records.
 
 ### Data location
 
