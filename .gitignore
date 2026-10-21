@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+artifacts/
+publish/
+TestResults/
+*.trx
+*.coverage
+*.coverage.xml
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Local SDK / tools
+.dotnet/
+tools/
+*.log
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Test artifacts and local backups
+screenshots-local/

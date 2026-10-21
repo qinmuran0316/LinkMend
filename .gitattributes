@@ -1,0 +1,9 @@
+* text=auto
+*.ps1 text eol=crlf
+*.cs text
+*.xaml text
+*.md text
+*.json text
+*.yml text
+*.png binary
+*.ico binary

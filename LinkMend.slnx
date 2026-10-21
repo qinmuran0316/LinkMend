@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LinkMend.App/LinkMend.App.csproj" />
+    <Project Path="src/LinkMend.Core/LinkMend.Core.csproj" />
+    <Project Path="src/LinkMend.Windows/LinkMend.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LinkMend.Tests/LinkMend.Tests.csproj" />
+  </Folder>
+</Solution>
